@@ -1,0 +1,12 @@
+# Generated Firefox checkout and build outputs
+/firefox/
+/obj-*/
+/dist/
+
+# Local tooling state
+/.cache/
+/.env
+*.log
+*.swp
+.DS_Store
+

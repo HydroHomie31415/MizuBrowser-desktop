@@ -1,0 +1,13 @@
+# Fast mode for JavaScript, CSS, browser UI, preferences, and branding work.
+mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-mizu-artifact
+mk_add_options AUTOCLOBBER=1
+
+ac_add_options --enable-artifact-builds
+ac_add_options --with-branding=browser/branding/mizu
+ac_add_options --with-app-basename=Mizu
+ac_add_options --with-distribution-id=org.mizubrowser
+ac_add_options 'MOZ_APP_ID={b2914fe1-5963-4b36-b806-653d1317a7e6}'
+ac_add_options MOZ_APP_PROFILE=mizu
+ac_add_options MOZ_APP_VENDOR=MizuBrowser
+ac_add_options MOZ_APP_REMOTINGNAME=mizu
+ac_add_options MOZ_PKG_APPNAME=mizu
