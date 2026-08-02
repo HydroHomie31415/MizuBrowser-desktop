@@ -9,4 +9,6 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 "$SCRIPT_DIR/sync.sh"
 note "Building Mizu in $(build_mode) mode"
 run_mach build "$@"
+# After the build, so the distribution directory it writes into exists.
+"$SCRIPT_DIR/extensions.sh"
 

@@ -1,0 +1,196 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+
+/* Mizu's chrome column. browser-mizu-autohide.js moves #nav-bar inside
+ * #sidebar-container, so the address bar and the tab strip are one element.
+ * This file makes that element stack vertically and slide away.
+ *
+ *   [mizu-chrome-column]    #nav-bar currently lives in the sidebar
+ *   [mizu-chrome-autohide]  the column hides
+ *   [mizu-chrome-revealed]  the column is on screen
+ *
+ * Only transform and opacity are ever transitioned. Animating a layout
+ * property would reflow the window every frame, which is what taking the
+ * chrome out of flow is meant to avoid. */
+
+:root {
+  --mizu-chrome-duration: 120ms;
+  --mizu-chrome-easing: ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --mizu-chrome-duration: 0ms;
+  }
+}
+
+:root[mizu-chrome-column] {
+  /* The tab strip sizes itself from a pinned-tab count rather than from its
+   * container, so without this it stays narrower than the column and the tabs
+   * do not line up with the address bar above them. */
+  --sidebar-expanded-launcher-width: 100%;
+
+  /* The sidebar is a XUL box laid out horizontally; the column needs the
+   * address bar above the tab strip. Its width is pinned here because the
+   * toolbar it now contains is far wider intrinsically than a sidebar, and
+   * would otherwise stretch the column to fit. */
+  & #sidebar-container {
+    flex-direction: column;
+    /* Set from mizu.chrome.column-width by browser-mizu-autohide.js. */
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens */
+    width: var(--mizu-chrome-column-width, 320px);
+    min-width: 0;
+    max-width: none;
+  }
+
+  /* Stacking made the sidebar a column item, so it has to be told to take the
+   * height left over by the toolbar -- otherwise it shrinks to its content and
+   * the tools bunch up under the tabs instead of sitting at the bottom. */
+  & #sidebar-container > sidebar-main {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  /* The toolbox now sits at the top of the column rather than across the
+   * window. Only the navigation toolbar is wanted here: the tab strip is
+   * already empty with vertical tabs, and the menubar and bookmarks toolbar
+   * would each eat a row of a 320px column. */
+  & #navigator-toolbox {
+    display: block;
+    width: 100%;
+    background: transparent;
+    border: none;
+  }
+
+  & #toolbar-menubar,
+  & #TabsToolbar,
+  & #PersonalToolbar {
+    display: none;
+  }
+
+  /* Two rows: the buttons, then the address bar beneath them. The toolbar is
+   * left intact and wrapped instead, because its buttons depend on being
+   * inside #navigator-toolbox. The wrap has to happen inside the customization
+   * target, since that is what actually contains both the address bar and the
+   * buttons around it. */
+  & #nav-bar {
+    flex-wrap: wrap;
+    align-items: start;
+    width: 100%;
+    /* It is no longer a window-width toolbar and should not paint like one. */
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+
+  & #nav-bar-customization-target {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  /* Built for a full window width: drop the titlebar padding, let the address
+   * bar take the free space, and let upstream's overflow handling push the
+   * buttons that no longer fit into the overflow panel. */
+  & .titlebar-spacer {
+    display: none;
+  }
+
+  /* The address bar takes the whole of its row, so it gets the column's full
+   * width. Upstream gives it a fixed width and a flex-shrink of 0 to keep it
+   * constant as the window resizes, which here just stops it fitting. */
+  & #urlbar-container {
+    --urlbar-container-min-width: 0px;
+    /* Full width, and ordered after the buttons so it wraps below them. */
+    flex: 1 1 100%;
+    order: 2;
+    width: auto;
+    min-width: 0;
+  }
+
+  & #nav-bar-customization-target,
+  & #urlbar {
+    min-width: 0;
+  }
+
+  /* A column has no room for a full toolbar's worth of buttons: every one kept
+   * comes straight out of the address bar's width. Back and forward go, since
+   * they are the ones with the most alternatives -- Alt+Left/Right, the mouse
+   * side buttons, the touchpad swipe and the content context menu. */
+  & #back-button,
+  & #forward-button,
+  & #stop-reload-button {
+    display: none;
+  }
+}
+
+/* Floating address bar
+ *
+ * Focusing the address bar expands it into a panel centred over the content
+ * rather than a 300px slot in the column. Firefox already promotes the focused
+ * address bar to a popover ("breakout"), which puts it in the top layer -- so
+ * it is laid out against the viewport and is not clipped or shifted by the
+ * column it lives in. All this does is say where. */
+
+:root[mizu-urlbar-float] #urlbar[breakout][breakout-extend]:popover-open {
+  position: fixed;
+  /* UrlbarInput.#updateTextboxPosition assigns style.top to pin the popover
+   * over the address bar's slot. That is an inline style, so overriding where
+   * the panel appears needs !important -- no selector can outrank it. */
+  /* stylelint-disable-next-line declaration-no-important */
+  inset-block-start: 15vh !important;
+  inset-inline-start: 50%;
+  translate: -50% 0;
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens */
+  width: min(44rem, 60vw);
+  height: auto;
+  max-height: 70vh;
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens */
+  box-shadow: 0 12px 40px rgb(0 0 0 / 45%);
+}
+
+:root[mizu-urlbar-float] #urlbar[breakout][breakout-extend]:popover-open::backdrop {
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens */
+  background-color: rgb(0 0 0 / 40%);
+}
+
+/* Auto-hide */
+
+:root[mizu-chrome-autohide] {
+  /* The column hides toward whichever screen edge it is docked against, which
+   * depends on both sidebar.position_start and the locale direction. */
+  --mizu-chrome-shift: -100%;
+
+  &:dir(rtl) {
+    --mizu-chrome-shift: 100%;
+  }
+
+  & #sidebar-container {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    z-index: var(--browser-area-z-index-sidebar-expand-on-hover);
+    /* Floating over live content, so it cannot inherit the window background. */
+    background-color: var(--toolbar-bgcolor, ActiveCaption);
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens */
+    box-shadow: var(--content-area-shadow);
+    transition:
+      transform var(--mizu-chrome-duration) var(--mizu-chrome-easing),
+      opacity var(--mizu-chrome-duration) var(--mizu-chrome-easing);
+  }
+
+  & #sidebar-container[sidebar-positionend] {
+    inset-inline: auto 0;
+  }
+
+  /* Nothing to drag once the column is out of flow. */
+  & #sidebar-launcher-splitter {
+    display: none;
+  }
+}
+
+:root[mizu-chrome-autohide]:not([mizu-chrome-revealed]) #sidebar-container {
+  transform: translateX(var(--mizu-chrome-shift));
+  opacity: 0;
+  pointer-events: none;
+}

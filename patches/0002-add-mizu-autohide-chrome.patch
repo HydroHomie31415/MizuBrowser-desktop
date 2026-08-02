@@ -1,0 +1,48 @@
+diff --git a/browser/base/content/browser-main.js b/browser/base/content/browser-main.js
+index 1ff101aecef..2a4b9900886 100644
+--- a/browser/base/content/browser-main.js
++++ b/browser/base/content/browser-main.js
+@@ -15,6 +15,7 @@
+     Services.scriptloader.loadSubScript("chrome://browser/content/browser-development-helpers.js", this);
+   }
+   Services.scriptloader.loadSubScript("chrome://browser/content/browser-pageActions.js", this);
++  Services.scriptloader.loadSubScript("chrome://browser/content/browser-mizu-autohide.js", this);
+   Services.scriptloader.loadSubScript("chrome://browser/content/sidebar/browser-sidebar.js", this);
+   Services.scriptloader.loadSubScript("chrome://browser/content/browser-customtitlebar.js", this);
+   Services.scriptloader.loadSubScript("chrome://browser/content/browser-unified-extensions.js", this);
+diff --git a/browser/base/jar.mn b/browser/base/jar.mn
+index 2779c0fa0a1..8ab6c50073a 100644
+--- a/browser/base/jar.mn
++++ b/browser/base/jar.mn
+@@ -50,6 +50,7 @@ browser.jar:
+         content/browser/browser-init.js                     (content/browser-init.js)
+         content/browser/browser-main.js                     (content/browser-main.js)
+         content/browser/browser-menubar.js                  (content/browser-menubar.js)
++        content/browser/browser-mizu-autohide.js            (content/browser-mizu-autohide.js)
+         content/browser/browser-pageActions.js              (content/browser-pageActions.js)
+         content/browser/browser-pagestyle.js                (content/browser-pagestyle.js)
+         content/browser/browser-places.js                   (content/browser-places.js)
+diff --git a/browser/themes/shared/browser-shared.css b/browser/themes/shared/browser-shared.css
+index b66912f0cf1..2922d828f0a 100644
+--- a/browser/themes/shared/browser-shared.css
++++ b/browser/themes/shared/browser-shared.css
+@@ -35,6 +35,7 @@
+ @import url("chrome://browser/skin/customizableui/customizeMode.css");
+ @import url("chrome://browser/skin/UITour.css");
+ @import url("chrome://browser/skin/formautofill-notification.css");
++@import url("chrome://browser/skin/browser-mizu-autohide.css");
+ 
+ :root,
+ body {
+diff --git a/browser/themes/shared/jar.inc.mn b/browser/themes/shared/jar.inc.mn
+index 832deba9be0..34bbafe3535 100644
+--- a/browser/themes/shared/jar.inc.mn
++++ b/browser/themes/shared/jar.inc.mn
+@@ -20,6 +20,7 @@
+   skin/classic/browser/blockedSite.css                         (../shared/blockedSite.css)
+   skin/classic/browser/browser-colors.css                      (../shared/browser-colors.css)
+   skin/classic/browser/browser-shared.css                      (../shared/browser-shared.css)
++  skin/classic/browser/browser-mizu-autohide.css               (../shared/browser-mizu-autohide.css)
+   skin/classic/browser/formautofill-notification.css           (../shared/formautofill-notification.css)
+   skin/classic/browser/identity-credential-notification.css    (../shared/identity-credential-notification.css)
+   skin/classic/browser/menupanel.css                           (../shared/menupanel.css)

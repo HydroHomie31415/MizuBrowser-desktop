@@ -21,6 +21,7 @@ Commands:
   bootstrap       Fetch source and install Mozilla build prerequisites
   sync            Install branding, product files, and patches
   build           Build the selected configuration
+  extensions      Install the bundled extensions into the build
   run             Run Mizu with an isolated development profile
   package         Create a release-style package
   clobber         Clean the selected Firefox object directory
@@ -36,7 +37,7 @@ EOF
 }
 
 case "$command_name" in
-  doctor|fetch|bootstrap|sync|build|status|test)
+  doctor|fetch|bootstrap|sync|build|status|test|extensions)
     exec "$PROJECT_ROOT/scripts/$command_name.sh" "$@"
     ;;
   upstream-check)

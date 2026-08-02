@@ -14,8 +14,10 @@ if [[ $(build_mode) == full ]]; then
 fi
 
 note "Bootstrapping Mozilla build dependencies for $(build_mode) mode"
-"$FIREFOX_DIR/mach" bootstrap --application-choice "$choice"
+(
+  cd "$FIREFOX_DIR"
+  ./mach bootstrap --application-choice "$choice"
+)
 "$SCRIPT_DIR/sync.sh"
 
 note "Bootstrap complete; run './mizu build'"
-

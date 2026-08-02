@@ -11,6 +11,8 @@ FIREFOX_DIR="$PROJECT_ROOT/firefox"
 
 # shellcheck source=../config/upstream.env
 source "$PROJECT_ROOT/config/upstream.env"
+# shellcheck source=../config/extensions.env
+source "$PROJECT_ROOT/config/extensions.env"
 
 die() {
   printf 'error: %s\n' "$*" >&2
