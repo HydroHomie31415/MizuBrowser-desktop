@@ -141,6 +141,180 @@ Changes take effect immediately in open windows. Set `mizu.chrome.autohide` to
 `false` to keep the column permanently on screen, or `mizu.chrome.column` to
 `false` to get stock Firefox layout back.
 
+## Unified command palette
+
+Press `Ctrl+Space` from any browser window to search and operate Mizu
+without opening its chrome column. The palette searches recently used tabs in
+every Mizu window, browsing history, bookmarks and browser commands. A normal
+query also offers a web search through the current default search engine.
+
+The result list is fully keyboard navigable with the arrow, Home, End, Page Up,
+Page Down, Enter and Escape keys. Prefix a query to restrict its source:
+
+| Prefix | Results |
+| --- | --- |
+| `>` | Browser commands |
+| `@` | Open tabs across all Mizu windows |
+| `^` | History and bookmarks |
+
+Commands include creating and restoring tabs, opening windows, pinning,
+muting, bookmarking, opening the Places libraries, settings and fullscreen.
+Selecting a tab in another window focuses that existing window instead of
+opening a duplicate.
+
+| Preference | Default | Purpose |
+| --- | --- | --- |
+| `mizu.palette.enabled` | `true` | Enable the palette and its shortcut |
+| `mizu.palette.max-results` | `14` | Maximum number of visible search results |
+| `mizu.palette.open-on-new-tab` | `true` | Open the palette on a newly selected new-tab page |
+
+## Video player
+
+Mizu detects HTML video in the selected tab, including videos in site frames.
+When a video is present, the video-player toolbar button becomes active; while
+it is playing, the icon uses the attention colour. Click the button, press
+`Alt+Shift+V`, or right-click a video and choose **Open in Mizu Video Player**.
+The player reuses the page's live video element instead of reopening its URL,
+so authenticated streams, site-selected quality, subtitles and DRM playback
+keep working. Closing the player returns the element to its exact old position.
+
+The player follows Firefox's dark control styling and includes timeline,
+volume, captions, playback speed, Picture-in-Picture, fullscreen and keyboard
+controls. Its settings panel changes seek distances, volume increments, control
+timeout, keyboard handling, and Anime4K defaults. The settings are persisted as
+preferences and used by later player sessions.
+
+| Preference | Default | Purpose |
+| --- | --- | --- |
+| `mizu.video.seek-backward-seconds` | `10` | Left-arrow/back button seek distance |
+| `mizu.video.seek-forward-seconds` | `10` | Right-arrow/forward button seek distance |
+| `mizu.video.volume-step-percent` | `5` | Up/down-arrow volume increment |
+| `mizu.video.controls-timeout-ms` | `2500` | Delay before idle controls fade |
+| `mizu.video.arrow-keys` | `true` | Let left/right arrows seek |
+| `mizu.video.space-key` | `true` | Let Space play and pause |
+| `mizu.video.media-keys` | `true` | Handle media play and track keys |
+| `mizu.video.capture-keys` | `true` | Stop the site seeing keys the player handled |
+| `mizu.video.anime4k-enabled` | `false` | Start GPU upscaling automatically |
+
+The player has to coexist with the site's own player. Those players bind
+handlers to the document, so Mizu keeps its own fullscreen changes and
+keystrokes from reaching them, and puts the video back if the page re-parents or
+hides it. Fullscreen targets the player's own host rather than "whatever is
+fullscreen", and when the video sits in an embed whose iframe was never marked
+`allowfullscreen`, the chrome process promotes the embedding frame instead.
+
+Silencing one document is not enough when the video is in a third-party embed.
+Gecko makes the embedding `<iframe>` the fullscreen element of every ancestor
+document as well, and the streaming sites built around the MegaPlay embed watch
+for exactly that: on seeing it, they move fullscreen onto a wrapper of their
+own a moment later. The embed then stops being the fullscreen element while the
+player inside it still believes it is, which is what produced a black screen.
+So a player running in a subframe asks the chrome process to install the same
+event guard in every ancestor document, for as long as the player is open --
+lazily installing it on entering fullscreen would lose the race against the
+page's own handler.
+
+## YouTube core
+
+Mizu removes Shorts from YouTube's home, search, subscription, channel and
+navigation surfaces. Opening a direct `/shorts/` link redirects to the normal
+watch page, preserving the video id and URL parameters, so the video has a
+timeline and can be opened in Mizu Video Player. Set
+`mizu.youtube.remove-shorts` to `false` to restore Shorts.
+
+When YouTube's in-page miniplayer is active, bare `Left` and `Right` arrows seek
+backward and forward using Mizu's configured seek intervals. The same shortcuts
+remain enabled in Firefox's floating Picture-in-Picture player. Text fields and
+modified arrow combinations keep their normal behaviour.
+
+The media bridge talks directly to YouTube's live player when Mizu Video Player
+is open. Quality and caption menus use YouTube's current renditions, chapter
+buttons seek through creator or automatic chapters, and playlist buttons move
+between videos without rebuilding the stream. YouTube's playback shortcuts are
+also available inside Mizu's player:
+
+| Shortcut | Action |
+| --- | --- |
+| `J` / `L` | Seek backward or forward 10 seconds |
+| `K` or `Space` | Play or pause |
+| `0`-`9` | Seek to 0%-90% |
+| `,` / `.` | Step one frame while paused |
+| `<` / `>` | Decrease or increase playback speed |
+| `Ctrl+Left` / `Ctrl+Right` | Previous or next chapter |
+| `Shift+P` / `Shift+N` | Previous or next playlist video |
+| `C` | Toggle captions |
+| `I` | Toggle Picture-in-Picture |
+| `F` | Toggle fullscreen |
+
+### Subtitles and quality
+
+A plain `<video>` has no notion of quality, and an adaptive stream keeps its
+subtitles in the manifest rather than in the element, so neither is the player's
+to read directly. `MizuMediaBridge.sys.mjs` asks the site's own media stack
+instead -- JW Player's API, an hls.js instance, then the element's text tracks --
+and everything it reads back is treated as untrusted: only primitives cross in
+either direction, and every call is wrapped so that a site throwing from a
+getter cannot take the player with it. Page objects are reached through waived
+Xrays, which is the only way an instance a site hung off its video element is
+visible at all.
+
+Cues are drawn by the player rather than by the video element. The element now
+belongs to the player, and the site's caption layer was left behind in the page
+where nothing can see it, so the chosen track is switched to `hidden` -- which
+still fires `cuechange` -- and its cues are rendered into the player's own
+overlay through `getCueAsHTML`. That is what makes the size, colour, background,
+edge, typeface and position settings possible. Players that never create a text
+track at all, because they parse the subtitle file themselves, are handled by
+adopting their caption element into the player instead.
+
+Selecting a track asks the site's player first, since only it can fetch a
+rendition that has not loaded yet, and then maps the same choice onto the text
+tracks by language, or by position when both lists describe the same set. The
+site's answer is never assumed to arrive.
+
+Preferred quality is a ceiling rather than a demand: the closest rendition at or
+below it is selected once per source, so playback does not spend its first
+seconds climbing up from the lowest rendition. `0` leaves the site on automatic.
+
+## Anime4K
+
+Anime4K runs as a full mpv-shader pipeline rather than a single hardcoded model.
+`Anime4KProgram.sys.mjs` translates the upstream `.glsl` hook syntax (`//!HOOK`,
+`//!BIND`, `//!SAVE`, `//!WIDTH`, `//!WHEN` and the reverse-polish size
+expressions) into WebGL2 programs, and works out per frame which passes run and
+how large each render target is. That is what makes `//!WHEN`-gated behaviour
+such as `AutoDownscalePre` work: a 720p source shown on a 4K display upscales
+x2, downscales to half the display size, then upscales x2 again, exactly as mpv
+would. Dropping another Anime4K `.glsl` into `browser/actors/anime4k/` and naming
+it in `Anime4KLibrary.sys.mjs` is all that adding a model takes.
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `mizu.video.anime4k-mode` | `a` | `a`, `b`, `c`, `aa`, `bb`, `ca` or `dog` |
+| `mizu.video.anime4k-quality` | `M` | Model size: `S`, `M` or `L` |
+| `mizu.video.anime4k-strength-percent` | `100` | Blend back towards the untouched frame |
+| `mizu.video.anime4k-max-source-height` | `1080` | Leave higher-resolution sources alone |
+| `mizu.video.anime4k-max-output-scale` | `4` | Upper bound on the upscale factor |
+| `mizu.video.anime4k-frame-rate-limit` | `0` | Process at most this many frames a second |
+| `mizu.video.anime4k-adaptive` | `true` | Step down a quality tier when frames run late |
+| `mizu.video.anime4k-stats` | `false` | Show the performance overlay |
+| `mizu.video.anime4k-extras` | `""` | Extra passes: `clamp`, `deblur`, `thin`, `darken` |
+
+The modes are upstream's: A restores then upscales, B uses the softer restore
+model for blurry sources, C denoises while upscaling, and A+A, B+B and C+A add
+the second restore pass. `dog` is the non-neural fallback for weak GPUs.
+
+Two failure modes are handled rather than reported. A lost WebGL context (which
+a fullscreen transition can cause) hides the canvas and rebuilds the pipeline,
+so the untouched video keeps playing instead of leaving a black screen; the same
+happens while shader programs are still compiling. Protected media and
+cross-origin video without CORS permission cannot be copied into a GPU texture
+at all, and playback falls back rather than being interrupted.
+
+The vendored Anime4K models keep their own upstream copyright and licence
+notices and are pinned to a single upstream revision, checked by `./mizu test`.
+Mizu's WebGL2 adapter is covered by this repository's MPL-2.0 license.
+
 Two performance rules matter when changing this code, because both failures are
 invisible on a fast machine and felt everywhere on a slow one. `MousePosTracker`
 calls `getMouseTargetRect` on every mouse move, so nothing on that path may

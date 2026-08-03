@@ -1,0 +1,131 @@
+diff --git a/browser/actors/moz.build b/browser/actors/moz.build
+--- a/browser/actors/moz.build
++++ b/browser/actors/moz.build
+@@ -103,6 +103,9 @@ FINAL_TARGET_FILES.actors += [
+     "AboutReaderParent.sys.mjs",
+     "AboutTabCrashedChild.sys.mjs",
+     "AboutTabCrashedParent.sys.mjs",
++    "Anime4KLibrary.sys.mjs",
++    "Anime4KProgram.sys.mjs",
++    "Anime4KRenderer.sys.mjs",
+     "BlockedSiteChild.sys.mjs",
+     "BlockedSiteParent.sys.mjs",
+     "BrowserProcessChild.sys.mjs",
+@@ -124,6 +127,9 @@ FINAL_TARGET_FILES.actors += [
+     "LightweightThemeChild.sys.mjs",
+     "LinkHandlerChild.sys.mjs",
+     "LinkHandlerParent.sys.mjs",
++    "MizuMediaBridge.sys.mjs",
++    "MizuVideoChild.sys.mjs",
++    "MizuVideoParent.sys.mjs",
+     "PageInfoChild.sys.mjs",
+     "PageInfoPreviewChild.sys.mjs",
+     "PageStyleChild.sys.mjs",
+@@ -149,6 +155,30 @@ FINAL_TARGET_FILES.actors += [
+     "WebRTCParent.sys.mjs",
+ ]
+ 
++# Anime4K shader text, kept in separate modules so a chain only pays for the
++# models it actually uses.
++FINAL_TARGET_FILES.actors.anime4k += [
++    "anime4k/Anime4K_AutoDownscalePre_x2.sys.mjs",
++    "anime4k/Anime4K_AutoDownscalePre_x4.sys.mjs",
++    "anime4k/Anime4K_Clamp_Highlights.sys.mjs",
++    "anime4k/Anime4K_Darken_Fast.sys.mjs",
++    "anime4k/Anime4K_Deblur_DoG.sys.mjs",
++    "anime4k/Anime4K_Restore_CNN_L.sys.mjs",
++    "anime4k/Anime4K_Restore_CNN_M.sys.mjs",
++    "anime4k/Anime4K_Restore_CNN_S.sys.mjs",
++    "anime4k/Anime4K_Restore_CNN_Soft_L.sys.mjs",
++    "anime4k/Anime4K_Restore_CNN_Soft_M.sys.mjs",
++    "anime4k/Anime4K_Restore_CNN_Soft_S.sys.mjs",
++    "anime4k/Anime4K_Thin_Fast.sys.mjs",
++    "anime4k/Anime4K_Upscale_CNN_x2_L.sys.mjs",
++    "anime4k/Anime4K_Upscale_CNN_x2_M.sys.mjs",
++    "anime4k/Anime4K_Upscale_CNN_x2_S.sys.mjs",
++    "anime4k/Anime4K_Upscale_Denoise_CNN_x2_L.sys.mjs",
++    "anime4k/Anime4K_Upscale_Denoise_CNN_x2_M.sys.mjs",
++    "anime4k/Anime4K_Upscale_Denoise_CNN_x2_S.sys.mjs",
++    "anime4k/Anime4K_Upscale_DoG_x2.sys.mjs",
++]
++
+ BROWSER_CHROME_MANIFESTS += [
+     "test/browser/browser.toml",
+ ]
+diff --git a/browser/base/content/browser-main.js b/browser/base/content/browser-main.js
+--- a/browser/base/content/browser-main.js
++++ b/browser/base/content/browser-main.js
+@@ -20,6 +20,7 @@
+   Services.scriptloader.loadSubScript("chrome://browser/content/sidebar/browser-sidebar.js", this);
+   Services.scriptloader.loadSubScript("chrome://browser/content/browser-customtitlebar.js", this);
+   Services.scriptloader.loadSubScript("chrome://browser/content/browser-unified-extensions.js", this);
++  Services.scriptloader.loadSubScript("chrome://browser/content/browser-mizu-video.js", this);
+   Services.scriptloader.loadSubScript("chrome://browser/content/tabbrowser/drag-and-drop.js", this);
+   Services.scriptloader.loadSubScript("chrome://browser/content/tabbrowser/split-view-footer.js", this);
+   Services.scriptloader.loadSubScript("chrome://browser/content/tabbrowser/tab.js", this);
+diff --git a/browser/base/jar.mn b/browser/base/jar.mn
+--- a/browser/base/jar.mn
++++ b/browser/base/jar.mn
+@@ -84,6 +84,7 @@ browser.jar:
+         content/browser/browser-unified-extensions.js       (content/browser-unified-extensions.js)
+         content/browser/browser-graphics-utils.js           (content/browser-graphics-utils.js)
+         content/browser/browser-webrtc.js                   (content/browser-webrtc.js)
++        content/browser/browser-mizu-video.js               (content/browser-mizu-video.js)
+         content/browser/global-scripts.js                   (content/global-scripts.js)
+         content/browser/main-popupset.js                    (content/main-popupset.js)
+ *       content/browser/pageinfo/pageInfo.xhtml             (content/pageinfo/pageInfo.xhtml)
+diff --git a/browser/components/DesktopActorRegistry.sys.mjs b/browser/components/DesktopActorRegistry.sys.mjs
+--- a/browser/components/DesktopActorRegistry.sys.mjs
++++ b/browser/components/DesktopActorRegistry.sys.mjs
+@@ -366,6 +366,29 @@ let JSWINDOWACTORS = {
+     safeForUntrustedWebProcess: true,
+   },
+ 
++  MizuVideo: {
++    parent: {
++      esModuleURI: "resource:///actors/MizuVideoParent.sys.mjs",
++    },
++    child: {
++      esModuleURI: "resource:///actors/MizuVideoChild.sys.mjs",
++      events: {
++        DOMContentLoaded: {},
++        pageshow: {},
++        play: { capture: true },
++        playing: { capture: true },
++        pause: { capture: true },
++        ended: { capture: true },
++        loadedmetadata: { capture: true },
++        emptied: { capture: true },
++      },
++    },
++    matches: ["http://*/*", "https://*/*", "file:///*"],
++    allFrames: true,
++    messageManagerGroups: ["browsers"],
++    safeForUntrustedWebProcess: true,
++  },
++
+   CanonicalURL: {
+     parent: {
+       esModuleURI: "resource:///actors/CanonicalURLParent.sys.mjs",
+diff --git a/browser/themes/shared/browser-shared.css b/browser/themes/shared/browser-shared.css
+--- a/browser/themes/shared/browser-shared.css
++++ b/browser/themes/shared/browser-shared.css
+@@ -30,6 +30,7 @@
+ @import url("chrome://browser/skin/searchbar.css");
+ @import url("chrome://browser/skin/sidebar.css");
+ @import url("chrome://browser/skin/aiWindowSidebar.css");
++@import url("chrome://browser/skin/browser-mizu-video.css");
+ @import url("chrome://browser/skin/smartwindowGroupTabs.css");
+ @import url("chrome://browser/skin/customizableui/customizeMode.css");
+ @import url("chrome://browser/skin/UITour.css");
+diff --git a/browser/themes/shared/jar.inc.mn b/browser/themes/shared/jar.inc.mn
+--- a/browser/themes/shared/jar.inc.mn
++++ b/browser/themes/shared/jar.inc.mn
+@@ -74,5 +74,7 @@
+   skin/classic/browser/urlbar-searchbar.css                    (../shared/urlbar-searchbar.css)
+   skin/classic/browser/UITour.css                              (../shared/UITour.css)
++  skin/classic/browser/browser-mizu-video.css                  (../shared/browser-mizu-video.css)
++  skin/classic/browser/mizu-video-player.svg                   (../shared/mizu-video-player.svg)
+   skin/classic/browser/webRTC-indicator.css                    (../shared/webRTC-indicator.css)
+   skin/classic/browser/webRTC-menubar-indicator.css            (../shared/webRTC-menubar-indicator.css)
+   skin/classic/browser/addons/addon-install-blocked.svg        (../shared/addons/addon-install-blocked.svg)

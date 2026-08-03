@@ -43,9 +43,28 @@ require_checkout() {
   [[ -x "$FIREFOX_DIR/mach" ]] || die "Firefox is not fetched; run './mizu fetch' first"
 }
 
+clean_in_source_build_metadata() {
+  local mozinfo="$FIREFOX_DIR/mozinfo.json"
+  if [[ -f $mozinfo ]]; then
+    note "Removing invalid in-source Firefox build metadata"
+    rm -f -- "$mozinfo"
+  fi
+}
+
 run_mach() {
   require_checkout
-  MOZCONFIG="$(mozconfig_path)" "$FIREFOX_DIR/mach" "$@"
+  clean_in_source_build_metadata
+  (
+    cd "$FIREFOX_DIR"
+    MOZCONFIG="$(mozconfig_path)" ./mach "$@"
+  )
+}
+
+exec_mach() {
+  require_checkout
+  clean_in_source_build_metadata
+  cd "$FIREFOX_DIR"
+  exec env MOZCONFIG="$(mozconfig_path)" ./mach "$@"
 }
 
 # Validate once when tooling starts so failures inside command substitutions

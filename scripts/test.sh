@@ -12,11 +12,32 @@ while IFS= read -r -d '' shell_file; do
 done < <(find "$PROJECT_ROOT/scripts" -type f -name '*.sh' -print0)
 bash -n "$PROJECT_ROOT/mizu"
 
+note "Checking mach working directory"
+mach_probe_dir=$(mktemp -d)
+trap 'rm -rf -- "$mach_probe_dir"' EXIT
+printf '#!/usr/bin/env bash\npwd\n' > "$mach_probe_dir/mach"
+chmod +x "$mach_probe_dir/mach"
+printf '{}\n' > "$mach_probe_dir/mozinfo.json"
+mach_working_dir=$(FIREFOX_DIR="$mach_probe_dir" run_mach | tail -n 1)
+[[ $mach_working_dir == "$mach_probe_dir" ]] ||
+  die "run_mach did not start in the Firefox checkout"
+[[ ! -e $mach_probe_dir/mozinfo.json ]] ||
+  die "run_mach did not remove invalid in-source build metadata"
+printf '{}\n' > "$mach_probe_dir/mozinfo.json"
+mach_working_dir=$(FIREFOX_DIR="$mach_probe_dir" exec_mach | tail -n 1)
+[[ $mach_working_dir == "$mach_probe_dir" ]] ||
+  die "exec_mach did not start in the Firefox checkout"
+[[ ! -e $mach_probe_dir/mozinfo.json ]] ||
+  die "exec_mach did not remove invalid in-source build metadata"
+rm -rf -- "$mach_probe_dir"
+trap - EXIT
+
 note "Checking required product files"
 required_files=(
   config/upstream.env
   config/extensions.env
   scripts/extensions.sh
+  scripts/vendor-anime4k.sh
   config/mozconfig.artifact
   config/mozconfig.full
   overlay/browser/branding/mizu/configure.sh
@@ -24,13 +45,105 @@ required_files=(
   overlay/browser/branding/mizu/locales/en-US/brand.properties
   overlay/browser/branding/mizu/pref/firefox-branding.js
   overlay/browser/base/content/browser-mizu-autohide.js
+  overlay/browser/base/content/browser-mizu-command-palette.js
+  overlay/browser/base/content/browser-mizu-video.js
+  overlay/browser/actors/Anime4KLibrary.sys.mjs
+  overlay/browser/actors/Anime4KProgram.sys.mjs
+  overlay/browser/actors/Anime4KRenderer.sys.mjs
+  overlay/browser/actors/MizuMediaBridge.sys.mjs
+  overlay/browser/actors/MizuVideoChild.sys.mjs
+  overlay/browser/actors/MizuVideoParent.sys.mjs
   overlay/browser/themes/shared/browser-mizu-autohide.css
+  overlay/browser/themes/shared/browser-mizu-command-palette.css
+  overlay/browser/themes/shared/browser-mizu-video.css
+  overlay/browser/themes/shared/mizu-video-player.svg
   patches/0001-set-mizu-application-identity.patch
   patches/0002-add-mizu-autohide-chrome.patch
+  patches/0003-add-mizu-video-player.patch
+  patches/0004-add-mizu-command-palette.patch
 )
 for relative_path in "${required_files[@]}"; do
   [[ -s "$PROJECT_ROOT/$relative_path" ]] || die "missing or empty: $relative_path"
 done
+
+for palette_path in browser-mizu-command-palette.js \
+  browser-mizu-command-palette.css; do
+  grep -q "$palette_path" \
+    "$PROJECT_ROOT/patches/0004-add-mizu-command-palette.patch" ||
+    die "command palette is not packaged: $palette_path"
+done
+for palette_pref in enabled max-results open-on-new-tab; do
+  grep -q "pref(\"mizu.palette.$palette_pref\"" \
+    "$PROJECT_ROOT/overlay/browser/branding/mizu/pref/firefox-branding.js" ||
+    die "missing command palette default: $palette_pref"
+done
+
+# The video player spans chrome and content processes, so verify that the actor,
+# controller, stylesheet and defaults all remain connected to the build.
+for video_path in Anime4KLibrary.sys.mjs Anime4KProgram.sys.mjs \
+  Anime4KRenderer.sys.mjs MizuMediaBridge.sys.mjs \
+  MizuVideoChild.sys.mjs MizuVideoParent.sys.mjs \
+  browser-mizu-video.js browser-mizu-video.css mizu-video-player.svg; do
+  grep -q "$video_path" "$PROJECT_ROOT/patches/0003-add-mizu-video-player.patch" ||
+    die "video player is not packaged: $video_path"
+done
+for video_pref in seek-backward-seconds seek-forward-seconds arrow-keys \
+  capture-keys preferred-quality subtitle-scale-percent subtitle-colour \
+  subtitle-background subtitle-edge subtitle-font subtitle-position-percent \
+  anime4k-enabled anime4k-mode anime4k-quality \
+  anime4k-strength-percent anime4k-max-source-height anime4k-adaptive; do
+  grep -q "pref(\"mizu.video.$video_pref\"" \
+    "$PROJECT_ROOT/overlay/browser/branding/mizu/pref/firefox-branding.js" ||
+    die "missing video player default: $video_pref"
+done
+grep -q 'pref("mizu.youtube.remove-shorts", true)' \
+  "$PROJECT_ROOT/overlay/browser/branding/mizu/pref/firefox-branding.js" ||
+  die "missing YouTube Shorts removal default"
+for youtube_core in youtubeQualities youtubeCaptions chapters playlistState; do
+  grep -q "$youtube_core" \
+    "$PROJECT_ROOT/overlay/browser/actors/MizuMediaBridge.sys.mjs" ||
+    die "missing YouTube media bridge feature: $youtube_core"
+done
+grep -q 'mizu-remove-youtube-shorts' \
+  "$PROJECT_ROOT/overlay/browser/actors/MizuVideoChild.sys.mjs" ||
+  die "YouTube Shorts removal is not installed"
+grep -q '_onYouTubeMiniPlayerKeyDown' \
+  "$PROJECT_ROOT/overlay/browser/actors/MizuVideoChild.sys.mjs" ||
+  die "YouTube miniplayer seeking is not installed"
+grep -q 'media.videocontrols.picture-in-picture.keyboard-controls.enabled' \
+  "$PROJECT_ROOT/overlay/browser/branding/mizu/pref/firefox-branding.js" ||
+  die "Picture-in-Picture keyboard seeking is not enabled"
+
+# The shader chain is assembled from vendored upstream models. Every model a
+# preset can name has to exist, be packaged, and still carry its own licence.
+anime4k_dir="$PROJECT_ROOT/overlay/browser/actors/anime4k"
+anime4k_revision=$(sed -n 's/^ANIME4K_REVISION=//p' \
+  "$PROJECT_ROOT/scripts/vendor-anime4k.sh")
+[[ $anime4k_revision =~ ^[0-9a-f]{40}$ ]] || die "invalid Anime4K revision pin"
+for shader_family in Restore_CNN Restore_CNN_Soft Upscale_CNN_x2 \
+  Upscale_Denoise_CNN_x2; do
+  for shader_tier in S M L; do
+    shader_file="$anime4k_dir/Anime4K_${shader_family}_${shader_tier}.sys.mjs"
+    [[ -s $shader_file ]] || die "missing Anime4K model: $shader_file"
+  done
+done
+for shader_extra in Clamp_Highlights Deblur_DoG Thin_Fast Darken_Fast \
+  AutoDownscalePre_x2 AutoDownscalePre_x4 Upscale_DoG_x2; do
+  [[ -s "$anime4k_dir/Anime4K_$shader_extra.sys.mjs" ]] ||
+    die "missing Anime4K shader: Anime4K_$shader_extra"
+done
+while IFS= read -r -d '' shader_file; do
+  shader_name=$(basename "$shader_file" .sys.mjs)
+  grep -q "^//!HOOK " "$shader_file" ||
+    die "$shader_name is not an mpv hook shader"
+  grep -qE 'Copyright \(c\) (2019-2021 bloc97|bloc97)|This is free and unencumbered software' \
+    "$shader_file" || die "$shader_name is missing its upstream licence notice"
+  grep -q "$anime4k_revision" "$shader_file" ||
+    die "$shader_name is missing its pinned upstream source revision"
+  grep -q "anime4k/$shader_name.sys.mjs" \
+    "$PROJECT_ROOT/patches/0003-add-mizu-video-player.patch" ||
+    die "$shader_name is not packaged"
+done < <(find "$anime4k_dir" -type f -name '*.sys.mjs' -print0)
 
 [[ $FIREFOX_REVISION =~ ^[0-9a-f]{40}$ ]] || die "invalid FIREFOX_REVISION"
 grep -q -- '--with-branding=browser/branding/mizu' "$PROJECT_ROOT/config/mozconfig.artifact"

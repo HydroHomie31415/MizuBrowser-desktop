@@ -49,19 +49,18 @@ case "$command_name" in
     "$PROJECT_ROOT/scripts/sync.sh"
     profile=${MIZU_DEV_PROFILE:-"$PROJECT_ROOT/.cache/profile-$(build_mode)"}
     mkdir -p "$profile"
-    exec env MOZCONFIG="$(mozconfig_path)" "$FIREFOX_DIR/mach" run --profile "$profile" --no-remote "$@"
+    exec_mach run --profile "$profile" --no-remote "$@"
     ;;
   package)
     # shellcheck source=scripts/common.sh
     source "$PROJECT_ROOT/scripts/common.sh"
     "$PROJECT_ROOT/scripts/sync.sh"
-    exec env MOZCONFIG="$(mozconfig_path)" "$FIREFOX_DIR/mach" package "$@"
+    exec_mach package "$@"
     ;;
   clobber)
     # shellcheck source=scripts/common.sh
     source "$PROJECT_ROOT/scripts/common.sh"
-    require_checkout
-    exec env MOZCONFIG="$(mozconfig_path)" "$FIREFOX_DIR/mach" clobber "$@"
+    exec_mach clobber "$@"
     ;;
   help|-h|--help)
     usage
@@ -72,4 +71,3 @@ case "$command_name" in
     exit 2
     ;;
 esac
-

@@ -1,0 +1,44 @@
+diff --git a/browser/base/content/browser-main.js b/browser/base/content/browser-main.js
+--- a/browser/base/content/browser-main.js
++++ b/browser/base/content/browser-main.js
+@@ -34,6 +34,7 @@
+   Services.scriptloader.loadSubScript("chrome://browser/content/places/places-menupopup.js", this);
+   Services.scriptloader.loadSubScript("chrome://browser/content/search/autocomplete-popup.js", this);
+   Services.scriptloader.loadSubScript("chrome://browser/content/search/searchbar.js", this);
++  Services.scriptloader.loadSubScript("chrome://browser/content/browser-mizu-command-palette.js", this);
+   if (AIWindow.isOpeningAIWindow(window)) {
+     ChromeUtils.importESModule("chrome://browser/content/urlbar/SmartbarInput.mjs", { global: "current" });
+   }
+diff --git a/browser/base/jar.mn b/browser/base/jar.mn
+--- a/browser/base/jar.mn
++++ b/browser/base/jar.mn
+@@ -70,6 +70,7 @@ browser.jar:
+         content/browser/browser-toolbarKeyNav.js            (content/browser-toolbarKeyNav.js)
+         content/browser/browser-thumbnails.js               (content/browser-thumbnails.js)
+         content/browser/browser-trustPanel.js               (content/browser-trustPanel.js)
++        content/browser/browser-mizu-command-palette.js     (content/browser-mizu-command-palette.js)
+         content/browser/browser-unified-extensions.js       (content/browser-unified-extensions.js)
+         content/browser/browser-graphics-utils.js           (content/browser-graphics-utils.js)
+         content/browser/browser-webrtc.js                   (content/browser-webrtc.js)
+diff --git a/browser/themes/shared/browser-shared.css b/browser/themes/shared/browser-shared.css
+--- a/browser/themes/shared/browser-shared.css
++++ b/browser/themes/shared/browser-shared.css
+@@ -4,6 +4,7 @@
+ 
+ @import url("chrome://global/skin/design-system/toolbar.css");
+ @import url("chrome://browser/skin/browser-colors.css");
++@import url("chrome://browser/skin/browser-mizu-command-palette.css");
+ @import url("chrome://browser/skin/addons/extension-controlled.css");
+ @import url("chrome://browser/skin/addons/unified-extensions.css");
+ @import url("chrome://browser/skin/downloads/indicator.css");
+diff --git a/browser/themes/shared/jar.inc.mn b/browser/themes/shared/jar.inc.mn
+--- a/browser/themes/shared/jar.inc.mn
++++ b/browser/themes/shared/jar.inc.mn
+@@ -31,6 +31,7 @@
+   skin/classic/browser/sanitizeDialog_v2.css                   (../shared/sanitizeDialog_v2.css)
+   skin/classic/browser/setDesktopBackground.css                (../shared/setDesktopBackground.css)
+   skin/classic/browser/sidebar.css                             (../shared/sidebar.css)
++  skin/classic/browser/browser-mizu-command-palette.css        (../shared/browser-mizu-command-palette.css)
+   skin/classic/browser/smartbar.css                            (../shared/smartbar.css)
+   skin/classic/browser/smartwindowGroupTabs.css                (../shared/smartwindowGroupTabs.css)
+   skin/classic/browser/toolbarbuttons.css                      (../shared/toolbarbuttons.css)

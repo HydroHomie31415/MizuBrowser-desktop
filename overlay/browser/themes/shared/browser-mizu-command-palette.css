@@ -1,0 +1,220 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+
+/* stylelint-disable stylelint-plugin-mozilla/use-design-tokens */
+
+.mizu-command-palette {
+  width: min(46rem, calc(100vw - 32px));
+  max-width: none;
+  max-height: min(42rem, calc(100vh - 64px));
+  margin: 12vh auto auto;
+  padding: 0;
+  overflow: hidden;
+  color: var(--toolbar-color);
+  background: var(--toolbar-bgcolor);
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 14px;
+  box-shadow: 0 20px 70px rgb(0 0 0 / 55%);
+
+  &::backdrop {
+    background: rgb(0 0 0 / 42%);
+    backdrop-filter: blur(2px);
+  }
+}
+
+.mizu-command-palette-frame {
+  display: flex;
+  min-height: 20rem;
+  max-height: min(42rem, calc(100vh - 64px));
+  flex-direction: column;
+}
+
+.mizu-command-palette-search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 0 18px;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.mizu-command-palette-search-icon,
+.mizu-command-palette-result-icon {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  background-color: currentColor;
+  mask: url("chrome://global/skin/icons/search-glass.svg") center / 18px no-repeat;
+  opacity: 0.7;
+}
+
+.mizu-command-palette-input {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font: menu;
+  font-size: 1.2rem;
+
+  &::placeholder {
+    color: color-mix(in srgb, currentColor 55%, transparent);
+  }
+}
+
+.mizu-command-palette-shortcut,
+.mizu-command-palette-hint kbd,
+.mizu-command-palette-keys kbd {
+  padding: 2px 6px;
+  color: color-mix(in srgb, currentColor 72%, transparent);
+  background: color-mix(in srgb, currentColor 9%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  border-radius: 5px;
+  box-shadow: 0 1px 0 color-mix(in srgb, currentColor 12%, transparent);
+  font: menu;
+  font-size: 0.8rem;
+}
+
+.mizu-command-palette-hints {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px 4px;
+}
+
+.mizu-command-palette-hint {
+  padding: 5px 8px;
+  color: color-mix(in srgb, currentColor 72%, transparent);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  font: menu;
+
+  &:hover {
+    color: inherit;
+    background: color-mix(in srgb, currentColor 9%, transparent);
+  }
+}
+
+.mizu-command-palette-results {
+  min-height: 0;
+  flex: 1;
+  padding: 6px 8px 8px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.mizu-command-palette-result {
+  display: flex;
+  width: 100%;
+  min-height: 50px;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 10px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  text-align: start;
+
+  &[selected] {
+    background: color-mix(in srgb, var(--toolbarbutton-icon-fill-attention) 18%, transparent);
+    outline: 1px solid color-mix(in srgb, var(--toolbarbutton-icon-fill-attention) 42%, transparent);
+  }
+}
+
+.mizu-command-palette-result-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.mizu-command-palette-result:not([mizu-has-icon]) .mizu-command-palette-result-icon {
+  background: currentColor;
+  mask: url("chrome://global/skin/icons/settings.svg") center / 18px no-repeat;
+}
+
+.mizu-command-palette-result[data-kind="search"]:not([mizu-has-icon]) .mizu-command-palette-result-icon {
+  mask-image: url("chrome://global/skin/icons/search-glass.svg");
+}
+
+.mizu-command-palette-result[mizu-has-icon] .mizu-command-palette-result-icon {
+  object-fit: contain;
+  background: transparent;
+  mask: none;
+  opacity: 1;
+}
+
+.mizu-command-palette-result-text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mizu-command-palette-result-label,
+.mizu-command-palette-result-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mizu-command-palette-result-label {
+  font: menu;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.mizu-command-palette-result-detail,
+.mizu-command-palette-result-badge,
+.mizu-command-palette-footer {
+  color: color-mix(in srgb, currentColor 62%, transparent);
+  font: menu;
+  font-size: 0.78rem;
+}
+
+.mizu-command-palette-result-badge {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  background: color-mix(in srgb, currentColor 7%, transparent);
+  border-radius: 999px;
+}
+
+.mizu-command-palette-empty {
+  display: grid;
+  min-height: 12rem;
+  place-items: center;
+  color: color-mix(in srgb, currentColor 58%, transparent);
+  font: menu;
+}
+
+.mizu-command-palette-footer {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.mizu-command-palette-keys {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .mizu-command-palette[open] {
+    animation: mizu-command-palette-in 100ms ease-out;
+  }
+}
+
+@keyframes mizu-command-palette-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.985);
+  }
+}
