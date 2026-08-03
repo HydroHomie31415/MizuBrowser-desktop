@@ -24,6 +24,7 @@ Commands:
   extensions      Install the bundled extensions into the build
   run             Run Mizu with an isolated development profile
   package         Create a release-style package
+  arch-package    Create a pacman-installable Arch Linux package
   clobber         Clean the selected Firefox object directory
   upstream-check  Compare the source pin with upstream main
   status          Show configuration and checkout state
@@ -37,7 +38,7 @@ EOF
 }
 
 case "$command_name" in
-  doctor|fetch|bootstrap|sync|build|status|test|extensions)
+  doctor|fetch|bootstrap|sync|build|status|test|extensions|arch-package)
     exec "$PROJECT_ROOT/scripts/$command_name.sh" "$@"
     ;;
   upstream-check)

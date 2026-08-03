@@ -1,0 +1,21 @@
+[Desktop Entry]
+Name=Mizu Browser
+GenericName=Web Browser
+Comment=Browse the web with Mizu
+Exec=mizu %u
+Icon=mizu
+Terminal=false
+Type=Application
+MimeType=text/html;text/xml;application/xhtml+xml;application/xml;application/rss+xml;application/pdf;x-scheme-handler/http;x-scheme-handler/https;
+Categories=Network;WebBrowser;
+StartupNotify=true
+StartupWMClass=mizu
+Actions=new-window;private-window;
+
+[Desktop Action new-window]
+Name=Open a New Window
+Exec=mizu --new-window
+
+[Desktop Action private-window]
+Name=Open a New Private Window
+Exec=mizu --private-window

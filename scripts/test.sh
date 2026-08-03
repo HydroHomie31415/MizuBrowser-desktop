@@ -34,6 +34,7 @@ trap - EXIT
 
 note "Checking required product files"
 required_files=(
+  .github/workflows/release-linux.yml
   config/upstream.env
   config/extensions.env
   scripts/extensions.sh
@@ -41,6 +42,17 @@ required_files=(
   config/mozconfig.artifact
   config/mozconfig.full
   overlay/browser/branding/mizu/configure.sh
+  overlay/browser/branding/mizu/default128.png
+  overlay/browser/branding/mizu/default16.png
+  overlay/browser/branding/mizu/default256.png
+  overlay/browser/branding/mizu/default32.png
+  overlay/browser/branding/mizu/default48.png
+  overlay/browser/branding/mizu/default64.png
+  overlay/browser/branding/mizu/content/about-logo.svg
+  overlay/browser/branding/mizu/content/about-logo.png
+  overlay/browser/branding/mizu/content/about-logo@2x.png
+  overlay/browser/branding/mizu/content/about-wordmark.svg
+  overlay/browser/branding/mizu/content/firefox-wordmark.svg
   overlay/browser/branding/mizu/locales/en-US/brand.ftl
   overlay/browser/branding/mizu/locales/en-US/brand.properties
   overlay/browser/branding/mizu/pref/firefox-branding.js
@@ -61,6 +73,10 @@ required_files=(
   patches/0002-add-mizu-autohide-chrome.patch
   patches/0003-add-mizu-video-player.patch
   patches/0004-add-mizu-command-palette.patch
+  packaging/arch/mizu.desktop
+  packaging/arch/mizu.svg
+  packaging/arch/package.sh
+  scripts/arch-package.sh
 )
 for relative_path in "${required_files[@]}"; do
   [[ -s "$PROJECT_ROOT/$relative_path" ]] || die "missing or empty: $relative_path"
@@ -88,7 +104,8 @@ for video_path in Anime4KLibrary.sys.mjs Anime4KProgram.sys.mjs \
     die "video player is not packaged: $video_path"
 done
 for video_pref in seek-backward-seconds seek-forward-seconds arrow-keys \
-  capture-keys preferred-quality subtitle-scale-percent subtitle-colour \
+  capture-keys preferred-quality subtitles-auto subtitle-language \
+  subtitle-scale-percent subtitle-colour \
   subtitle-background subtitle-edge subtitle-font subtitle-position-percent \
   anime4k-enabled anime4k-mode anime4k-quality \
   anime4k-strength-percent anime4k-max-source-height anime4k-adaptive; do
@@ -195,6 +212,10 @@ for extension_prefix in $MIZU_EXTENSIONS; do
 done
 grep -Fq 'extensions.sh' "$PROJECT_ROOT/scripts/build.sh" ||
   die "build.sh no longer installs bundled extensions"
+grep -Fq 'arch-package)' "$PROJECT_ROOT/mizu" ||
+  die "arch-package command is not routed by ./mizu"
+grep -Fq 'Exec=mizu %u' "$PROJECT_ROOT/packaging/arch/mizu.desktop" ||
+  die "Arch desktop launcher does not start Mizu"
 
 if grep -Eq 'ac_add_options (MOZ_APP_ID|MOZ_APP_PROFILE|MOZ_APP_VENDOR)=' \
   "$PROJECT_ROOT/config/mozconfig.artifact" "$PROJECT_ROOT/config/mozconfig.full"; then

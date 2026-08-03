@@ -1347,10 +1347,9 @@ class Player {
 
     // Left enabled even with nothing to list: a menu saying so is more use
     // than a dead button when a site keeps its subtitles out of reach.
-    this.root.querySelector(".captions").toggleAttribute(
-      "active",
-      !!(this.textTrack || this.pageCaptions)
-    );
+    this.root
+      .querySelector(".captions")
+      .toggleAttribute("active", !!(this.textTrack || this.pageCaptions));
     let active = levels.find(level => level.active);
     this.root.querySelector(".quality-button").textContent = active
       ? active.label
@@ -1433,11 +1432,11 @@ class Player {
     let wanted =
       subtitles.find(
         track =>
-          language &&
-          (track.language || "").toLowerCase().startsWith(language)
+          language && (track.language || "").toLowerCase().startsWith(language)
       ) ??
-      subtitles.find(track =>
-        language && (track.label || "").toLowerCase().includes(language)
+      subtitles.find(
+        track =>
+          language && (track.label || "").toLowerCase().includes(language)
       ) ??
       subtitles[0];
     if (this.bridge.selectSubtitle(wanted.id)) {

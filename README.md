@@ -8,9 +8,9 @@ not committed here.
 
 > [!IMPORTANT]
 > Mizu is an independent project. Do not ship Mozilla trademarks or connect a
-> public release to Mozilla's update infrastructure. The initial icon set is
-> copied from Firefox's **unofficial local-build branding** as a placeholder;
-> replace it before distributing Mizu.
+> public release to Mozilla's update infrastructure. Mizu's Linux artwork is
+> original to this project; Windows and macOS releases still need replacement
+> installer and application artwork before distribution.
 
 ## Requirements
 
@@ -51,6 +51,25 @@ MIZU_BUILD_MODE=full ./mizu build
 MIZU_BUILD_MODE=full ./mizu run
 ```
 
+## Install on Arch Linux
+
+Tagged releases include a native pacman package for x86-64 Arch Linux. Install
+or upgrade the latest release with:
+
+```bash
+sudo pacman -U https://github.com/HydroHomie31415/MizuBrowser-desktop/releases/latest/download/mizu-browser-x86_64.pkg.tar.zst
+```
+
+To publish a release, push a version tag such as `v0.1.0`. GitHub Actions builds
+Mizu, creates the Arch package, publishes its SHA-256 checksum, and attaches both
+the versioned package and the stable `mizu-browser-x86_64.pkg.tar.zst` download
+to the GitHub release. The workflow can also be run manually to test packaging
+without publishing a release.
+
+To package an existing local build instead, run `./mizu arch-package 0.1.0`.
+The resulting package is written to `dist/` and can be installed with
+`sudo pacman -U dist/mizu-browser-0.1.0-1-x86_64.pkg.tar.zst`.
+
 ## Commands
 
 | Command | Purpose |
@@ -63,6 +82,7 @@ MIZU_BUILD_MODE=full ./mizu run
 | `./mizu extensions` | Install the bundled extensions into the build |
 | `./mizu run [args...]` | Run with a separate development profile |
 | `./mizu package` | Produce a release-style archive |
+| `./mizu arch-package VERSION` | Produce a pacman-installable Arch package |
 | `./mizu clobber` | Clean the selected object directory |
 | `./mizu upstream-check` | Compare the pin with upstream `main` |
 | `./mizu status` | Show configuration, checkout, and source changes |
@@ -257,6 +277,18 @@ either direction, and every call is wrapped so that a site throwing from a
 getter cannot take the player with it. Page objects are reached through waived
 Xrays, which is the only way an instance a site hung off its video element is
 visible at all.
+
+Not every player leaves anything to read. Some parse the subtitle file
+themselves and draw into a div beside the video's container, so when the text
+track carries no cues the player adopts that element instead, slotting it over
+the video and leaving its own offsets alone -- a caption layer positions itself,
+and overriding that stacks every line at the top of the frame. The subtitle menu
+says which of the two is in use, or that nothing was found at all, so a site
+keeping its subtitles out of reach is visible rather than silent.
+
+Taking the video over also leaves nothing selected, because the site's UI was
+what had the track switched on. `mizu.video.subtitles-auto` turns one back on,
+preferring `mizu.video.subtitle-language`.
 
 Cues are drawn by the player rather than by the video element. The element now
 belongs to the player, and the site's caption layer was left behind in the page
