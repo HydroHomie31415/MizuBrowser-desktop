@@ -70,6 +70,10 @@ pref("mizu.video.subtitle-background", "soft");
 pref("mizu.video.subtitle-edge", "outline");
 pref("mizu.video.subtitle-font", "sans");
 pref("mizu.video.subtitle-position-percent", 8);
+// Turn a subtitle track on when the site handed over the video with none
+// selected, preferring this language.
+pref("mizu.video.subtitles-auto", true);
+pref("mizu.video.subtitle-language", "en");
 
 // Anime4K. The mode and quality names come from the upstream preset table:
 // a, b, c, aa, bb, ca or dog, and S, M or L.

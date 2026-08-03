@@ -31,6 +31,8 @@ const SETTINGS = new Map([
   ["subtitle-edge", { type: "string", values: /^(none|outline|shadow)$/ }],
   ["subtitle-font", { type: "string", values: /^(sans|serif|mono)$/ }],
   ["subtitle-position-percent", { type: "int", min: 0, max: 40 }],
+  ["subtitles-auto", { type: "bool" }],
+  ["subtitle-language", { type: "string", values: /^[a-z]{0,8}$/ }],
 ]);
 
 /**

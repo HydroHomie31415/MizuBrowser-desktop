@@ -542,6 +542,7 @@ class Player {
         <label><span>Space plays or pauses</span><input data-setting="space-key" type="checkbox"></label>
         <label><span>Handle media keys</span><input data-setting="media-keys" type="checkbox"></label>
         <label><span>Keep site shortcuts from firing</span><input data-setting="capture-keys" type="checkbox"></label>
+        <label><span>Turn subtitles on automatically</span><input data-setting="subtitles-auto" type="checkbox"></label>
         <label>Preferred quality <select data-setting="preferred-quality">
           <option value="0">Auto</option><option value="2160">2160p</option>
           <option value="1440">1440p</option><option value="1080">1080p</option>
@@ -795,6 +796,7 @@ class Player {
     this._setInput("media-keys", this.settings.mediaKeys);
     this._setInput("capture-keys", this.settings.captureKeys);
     this._setInput("preferred-quality", this.settings.preferredQuality);
+    this._setInput("subtitles-auto", this.settings.subtitlesAuto);
     this._setInput(
       "subtitle-scale-percent",
       Math.round(this.settings.subtitleScale * 100)
@@ -1343,8 +1345,12 @@ class Player {
     this.chapters = this.bridge.chapters();
     this.playlistState = this.bridge.playlistState();
 
-    this.root.querySelector(".captions").disabled =
-      !subtitles.length && !this.pageCaptions;
+    // Left enabled even with nothing to list: a menu saying so is more use
+    // than a dead button when a site keeps its subtitles out of reach.
+    this.root.querySelector(".captions").toggleAttribute(
+      "active",
+      !!(this.textTrack || this.pageCaptions)
+    );
     let active = levels.find(level => level.active);
     this.root.querySelector(".quality-button").textContent = active
       ? active.label
@@ -1364,6 +1370,7 @@ class Player {
     nextVideo.disabled = !this.playlistState.next;
 
     this._applyPreferredQuality(levels);
+    this._enableSubtitlesOnce(subtitles);
     this._watchTextTrack(this.bridge.activeTextTrack());
     this._adoptPageCaptions();
     this.subtitleTracks = subtitles;
@@ -1401,6 +1408,40 @@ class Player {
     }
     if (!wanted.active) {
       this._toast(`Quality set to ${wanted.label}`);
+    }
+  }
+
+  /**
+   * Turns subtitles on once, when the site left every track switched off.
+   *
+   * Sites hand the player a video whose subtitles were being drawn by their own
+   * UI, and taking the element over leaves nothing selected. Picking a track
+   * here keeps subtitles working across the handover instead of silently
+   * dropping them.
+   */
+  _enableSubtitlesOnce(subtitles) {
+    if (
+      this.subtitlesChosen ||
+      !this.settings.subtitlesAuto ||
+      !subtitles.length ||
+      subtitles.some(track => track.active)
+    ) {
+      return;
+    }
+    this.subtitlesChosen = true;
+    let language = (this.settings.subtitleLanguage || "").toLowerCase();
+    let wanted =
+      subtitles.find(
+        track =>
+          language &&
+          (track.language || "").toLowerCase().startsWith(language)
+      ) ??
+      subtitles.find(track =>
+        language && (track.label || "").toLowerCase().includes(language)
+      ) ??
+      subtitles[0];
+    if (this.bridge.selectSubtitle(wanted.id)) {
+      this._toast(`Subtitles: ${wanted.label}`);
     }
   }
 
@@ -1472,7 +1513,15 @@ class Player {
     this.pageCapturesHome = {
       parent: found.parentNode,
       next: found.nextSibling,
+      style: found.getAttribute("style"),
     };
+    // Its offsets resolve against the stage once it is slotted, which is the
+    // same shape of box it came from. Only a statically positioned layer needs
+    // help, because nothing would anchor it over the video.
+    if (this.window.getComputedStyle(found).position == "static") {
+      found.style.position = "absolute";
+      found.style.inset = "auto 0 6% 0";
+    }
     found.setAttribute("slot", "page-captions");
     this.host.appendChild(found);
     this._toast("Using this site's own subtitles");
@@ -1523,6 +1572,11 @@ class Player {
       return;
     }
     this.pageCaptions.removeAttribute("slot");
+    if (home.style === null) {
+      this.pageCaptions.removeAttribute("style");
+    } else {
+      this.pageCaptions.setAttribute("style", home.style);
+    }
     home.parent.insertBefore(this.pageCaptions, home.next);
     this.pageCaptions = null;
   }
@@ -1568,6 +1622,7 @@ class Player {
       button.dataset.kind = kind;
       button.setAttribute("role", "menuitemradio");
       button.setAttribute("aria-checked", String(!!item.active));
+      button.disabled = !!item.disabled;
       button.textContent =
         (item.active ? "\u2713 " : "\u2007 ") + (item.label ?? item.id);
       menu.appendChild(button);
@@ -1794,6 +1849,7 @@ const SETTING_NAMES = {
   "subtitle-edge": "subtitleEdge",
   "subtitle-font": "subtitleFont",
   "subtitle-position-percent": "subtitlePosition",
+  "subtitles-auto": "subtitlesAuto",
 };
 
 /** Caption layers of the players these sites actually embed. */
@@ -1910,7 +1966,9 @@ const PLAYER_STYLES = `
   :host([subtitle-background=solid]) .subtitle-line { background:#000; }
   :host([subtitle-edge=outline]) .subtitles { paint-order:stroke fill; -webkit-text-stroke:.09em #000; }
   :host([subtitle-edge=shadow]) .subtitles { text-shadow:0 .06em .12em #000, 0 0 .3em rgba(0,0,0,.8); }
-  ::slotted([slot=page-captions]) { position:absolute!important; inset:0!important; z-index:4!important; pointer-events:none!important; }
+  /* The adopted layer keeps its own offsets: a player positions its captions
+     itself, and overriding that stacks every line at the top of the frame. */
+  ::slotted([slot=page-captions]) { z-index:4!important; pointer-events:none!important; margin:0!important; }
   .menu { position:absolute; z-index:7; right:16px; bottom:96px; min-width:190px; max-height:56%; overflow:auto; padding:6px; border-radius:8px; background:#2b2a33; box-shadow:0 8px 30px rgba(0,0,0,.5); }
   .menu[hidden] { display:none; }
   .menu-item { display:block; width:100%; text-align:left; font-variant-numeric:tabular-nums; white-space:nowrap; }

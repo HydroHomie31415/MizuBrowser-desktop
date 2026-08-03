@@ -191,6 +191,8 @@ var MizuVideoPlayer = {
       subtitleEdge: string("subtitle-edge", "outline"),
       subtitleFont: string("subtitle-font", "sans"),
       subtitlePosition: int("subtitle-position-percent", 8),
+      subtitlesAuto: bool("subtitles-auto", true),
+      subtitleLanguage: string("subtitle-language", "en"),
       anime4k: bool("anime4k-enabled", false),
       anime4kMode: string("anime4k-mode", "a"),
       anime4kQuality: string("anime4k-quality", "M"),
