@@ -1452,17 +1452,19 @@ class Player {
    * cannot reach inside it.
    */
   _adoptPageCaptions() {
-    if (this.pageCaptions?.isConnected || this.textTrack) {
+    // A text track that actually carries cues is rendered by the player, and
+    // the site's own layer is left alone. A track with no cues means the site
+    // parsed the subtitle file itself, so its layer is the only thing that
+    // knows what the current line is.
+    if (this.textTrack?.cues?.length) {
+      this._releasePageCaptions();
       return;
     }
-    let container = this.original.parent;
-    if (!container?.isConnected) {
+    if (this.pageCaptions?.isConnected) {
       return;
     }
-    let captionRoot = container.closest?.("#movie_player") ?? container;
-    let found = captionRoot.querySelector?.(
-      ".ytp-caption-window-container, .jw-captions, .jw-text-track-container, .plyr__captions, .vjs-text-track-display"
-    );
+
+    let found = this._findCaptionLayer();
     if (!found) {
       return;
     }
@@ -1473,6 +1475,45 @@ class Player {
     };
     found.setAttribute("slot", "page-captions");
     this.host.appendChild(found);
+    this._toast("Using this site's own subtitles");
+  }
+
+  /**
+   * Finds the element a site player draws its subtitles into.
+   *
+   * Players put this layer beside the video's container rather than inside it,
+   * so the search covers the whole document. The named selectors are tried
+   * first; the loose one after them only accepts overlays, because "caption"
+   * appears in the class names of plenty of menus and buttons too.
+   *
+   * @returns {Element|null}
+   */
+  _findCaptionLayer() {
+    let candidates = [
+      ...this.document.querySelectorAll(CAPTION_SELECTORS),
+    ].filter(element => !this.host.contains(element));
+    if (!candidates.length) {
+      candidates = [
+        ...this.document.querySelectorAll(LOOSE_CAPTION_SELECTORS),
+      ].filter(element => {
+        if (this.host.contains(element) || element.closest("button, select")) {
+          return false;
+        }
+        let style = this.window.getComputedStyle(element);
+        return style.position == "absolute" || style.position == "fixed";
+      });
+    }
+    if (!candidates.length) {
+      return null;
+    }
+    // The one closest to where the video came from is the one that belongs to
+    // it, which matters on pages carrying more than one player.
+    let home = this.original.parent;
+    return (
+      candidates.find(element => home?.contains?.(element)) ??
+      candidates.find(element => element.contains?.(home)) ??
+      candidates[0]
+    );
   }
 
   _releasePageCaptions() {
@@ -1754,6 +1795,25 @@ const SETTING_NAMES = {
   "subtitle-font": "subtitleFont",
   "subtitle-position-percent": "subtitlePosition",
 };
+
+/** Caption layers of the players these sites actually embed. */
+const CAPTION_SELECTORS = [
+  ".ytp-caption-window-container",
+  ".jw-captions",
+  ".jw-text-track-container",
+  ".plyr__captions",
+  ".vjs-text-track-display",
+  ".art-subtitle",
+  ".dplayer-subtitle",
+  ".shaka-text-container",
+  ".video-js .vjs-text-track-display",
+].join(",");
+
+const LOOSE_CAPTION_SELECTORS = [
+  "[class*=caption i]",
+  "[class*=subtitle i]",
+  "[class*=text-track i]",
+].join(",");
 
 const SUBTITLE_COLOURS = {
   white: "#ffffff",
