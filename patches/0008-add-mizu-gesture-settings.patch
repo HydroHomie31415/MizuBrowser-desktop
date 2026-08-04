@@ -1,0 +1,117 @@
+# Add the Mizu mouse gestures pane to settings: register it, put it in the
+# category list, and package its module, editor widget, icon and strings.
+#
+# The pane is declared the way Firefox's own redesigned panes are, so it gets
+# the category button, search and sub-pane handling for free. The editor widget
+# keeps no state: it reads and writes the mizu.gestures.pattern. branch
+# directly, so a gesture added here and one added in about:config are the same
+# thing. See browser/components/preferences/config/mizu-gestures.mjs.
+#
+# Recording a gesture is done by the browser, not by this page: the pane sets
+# mizu.gestures.recording and the window's gesture handler hands the next
+# stroke back through mizu.gestures.recorded. That way a stroke is read by the
+# same recogniser that will interpret it later, rather than by a second one
+# here that could disagree with it.
+#
+# Strings live in Mizu's own mizuGestures.ftl rather than in Firefox's
+# preferences.ftl, which upstream rewrites and localises; keeping them apart
+# means a Firefox update cannot collide with them.
+#
+# As with the gestures patch itself, each addition sits outside the context of
+# the Mizu patches before it, so every patch still applies and reverses alone.
+diff --git a/browser/components/preferences/jar.mn b/browser/components/preferences/jar.mn
+diff --git a/browser/components/preferences/jar.mn b/browser/components/preferences/jar.mn
+--- a/browser/components/preferences/jar.mn
++++ b/browser/components/preferences/jar.mn
+@@ -57,6 +57,9 @@ browser.jar:
+    content/browser/preferences/widgets/placeholder-message.css          (widgets/placeholder-message/placeholder-message.css)
+    content/browser/preferences/widgets/nav-notice.mjs                   (widgets/nav-notice/nav-notice.mjs)
+    content/browser/preferences/widgets/nav-notice.css                   (widgets/nav-notice/nav-notice.css)
++   content/browser/preferences/config/mizu-gestures.mjs                 (config/mizu-gestures.mjs)
++   content/browser/preferences/widgets/mizu-gesture-list.mjs            (widgets/mizu-gesture-list/mizu-gesture-list.mjs)
++   content/browser/preferences/widgets/mizu-gesture-list.css            (widgets/mizu-gesture-list/mizu-gesture-list.css)
+    content/browser/preferences/widgets/setting-control.css              (widgets/setting-control/setting-control.css)
+    content/browser/preferences/widgets/setting-control.mjs              (widgets/setting-control/setting-control.mjs)
+    content/browser/preferences/widgets/setting-group.mjs                (widgets/setting-group/setting-group.mjs)
+diff --git a/browser/components/preferences/preferences.js b/browser/components/preferences/preferences.js
+--- a/browser/components/preferences/preferences.js
++++ b/browser/components/preferences/preferences.js
+@@ -290,6 +290,13 @@ const CONFIG_PANES = Object.freeze({
+     visible: () =>
+       Services.prefs.getBoolPref("browser.settings-redesign.enabled", false),
+   },
++  gestures: {
++    l10nId: "mizu-gestures-pane-title",
++    iconSrc: "chrome://browser/skin/preferences/mizu-category-gestures.svg",
++    groupIds: ["mizuGestures", "mizuGestureBindings"],
++    module: "chrome://browser/content/preferences/config/mizu-gestures.mjs",
++    visible: () => srdSectionPrefs.all,
++  },
+   connectionSecurity: {
+     parent: "privacy",
+     l10nId: "preferences-connection-header",
+diff --git a/browser/components/preferences/preferences.xhtml b/browser/components/preferences/preferences.xhtml
+--- a/browser/components/preferences/preferences.xhtml
++++ b/browser/components/preferences/preferences.xhtml
+@@ -45,6 +45,7 @@
+   <link rel="localization" href="browser/preferences/fonts.ftl"/>
+   <link rel="localization" href="browser/preferences/moreFromMozilla.ftl"/>
+   <link rel="localization" href="browser/preferences/preferences.ftl"/>
++  <link rel="localization" href="preview/mizuGestures.ftl"/>
+   <link rel="localization" href="toolkit/branding/brandings.ftl"/>
+   <link rel="localization" href="toolkit/firefoxlabs/features.ftl"/>
+   <link rel="localization" href="toolkit/global/mozPageHeader.ftl"/>
+@@ -90,6 +91,7 @@
+   <script type="module" src="chrome://browser/content/preferences/widgets/placeholder-message.mjs"></script>
+   <script type="module" src="chrome://browser/content/preferences/widgets/browser-language-restart-message.mjs"></script>
+   <script type="module" src="chrome://browser/content/preferences/widgets/nav-notice.mjs"></script>
++  <script type="module" src="chrome://browser/content/preferences/widgets/mizu-gesture-list.mjs"></script>
+   <script type="module" src="chrome://browser/content/preferences/widgets/setting-pane.mjs"></script>
+   <script type="module" src="chrome://browser/content/preferences/widgets/setting-group.mjs"></script>
+   <script type="module" src="chrome://browser/content/preferences/widgets/setting-control.mjs"></script>
+@@ -146,6 +148,12 @@
+         iconsrc="chrome://browser/skin/login.svg"
+         data-l10n-id="pane-passwords-autofill-title2">
+       </html:moz-page-nav-button>
++      <html:moz-page-nav-button id="category-gestures"
++        hidden="true"
++        view="paneGestures"
++        iconsrc="chrome://browser/skin/preferences/mizu-category-gestures.svg"
++        data-l10n-id="mizu-gestures-nav">
++      </html:moz-page-nav-button>
+       <html:moz-page-nav-button id="category-appearance"
+         view="paneAppearance"
+         iconsrc="chrome://global/skin/icons/eye.svg"
+diff --git a/browser/locales/jar.mn b/browser/locales/jar.mn
+--- a/browser/locales/jar.mn
++++ b/browser/locales/jar.mn
+@@ -18,6 +18,7 @@
+   preview/smartTabGroups.ftl                       (../locales-preview/smartTabGroups.ftl)
+   preview/privacyPreferences.ftl                   (../locales-preview/privacyPreferences.ftl)
+   preview/autoTabGrouping.ftl                      (../locales-preview/autoTabGrouping.ftl)
++  preview/mizuGestures.ftl                         (../locales-preview/mizuGestures.ftl)
+ 
+ @AB_CD@.jar:
+ % locale browser @AB_CD@ %locale/browser/
+diff --git a/browser/modules/moz.build b/browser/modules/moz.build
+--- a/browser/modules/moz.build
++++ b/browser/modules/moz.build
+@@ -129,6 +129,7 @@ EXTRA_JS_MODULES += [
+     "LaterRun.sys.mjs",
+     "LinksCache.sys.mjs",
+     "MenuSectionLayout.sys.mjs",
++    "MizuGestureActions.sys.mjs",
+     "PageActions.sys.mjs",
+     "PartnerLinkAttribution.sys.mjs",
+     "PermissionPromptTargeting.sys.mjs",
+diff --git a/browser/themes/shared/jar.inc.mn b/browser/themes/shared/jar.inc.mn
+--- a/browser/themes/shared/jar.inc.mn
++++ b/browser/themes/shared/jar.inc.mn
+@@ -165,6 +165,7 @@
+   skin/classic/browser/preferences/android-menu.svg            (../shared/preferences/android-menu.svg)
+   skin/classic/browser/preferences/category-general.svg        (../shared/preferences/category-general.svg)
+   skin/classic/browser/preferences/category-accessibility.svg  (../shared/preferences/category-accessibility.svg)
++  skin/classic/browser/preferences/mizu-category-gestures.svg  (../shared/preferences/mizu-category-gestures.svg)
+   skin/classic/browser/preferences/category-privacy-security.svg    (../shared/preferences/category-privacy-security.svg)
+   skin/classic/browser/preferences/category-search.svg         (../shared/preferences/category-search.svg)
+   skin/classic/browser/preferences/category-sync.svg           (../shared/preferences/category-sync.svg)

@@ -59,11 +59,19 @@ required_files=(
   overlay/browser/branding/mizu/pref/firefox-branding.js
   overlay/browser/base/content/browser-mizu-autohide.js
   overlay/browser/base/content/browser-mizu-command-palette.js
+  overlay/browser/base/content/browser-mizu-gestures.js
   overlay/browser/base/content/browser-mizu-hints.js
   overlay/browser/base/content/browser-mizu-video.js
   overlay/browser/actors/Anime4KLibrary.sys.mjs
   overlay/browser/actors/Anime4KProgram.sys.mjs
   overlay/browser/actors/Anime4KRenderer.sys.mjs
+  overlay/browser/actors/MizuGesturesChild.sys.mjs
+  overlay/browser/modules/MizuGestureActions.sys.mjs
+  overlay/browser/components/preferences/config/mizu-gestures.mjs
+  overlay/browser/components/preferences/widgets/mizu-gesture-list/mizu-gesture-list.mjs
+  overlay/browser/components/preferences/widgets/mizu-gesture-list/mizu-gesture-list.css
+  overlay/browser/locales-preview/mizuGestures.ftl
+  overlay/browser/themes/shared/preferences/mizu-category-gestures.svg
   overlay/browser/actors/MizuHintsChild.sys.mjs
   overlay/browser/actors/MizuHintsParent.sys.mjs
   overlay/browser/actors/test/browser/browser_mizu_hints.js
@@ -73,6 +81,7 @@ required_files=(
   overlay/browser/actors/MizuVideoParent.sys.mjs
   overlay/browser/themes/shared/browser-mizu-autohide.css
   overlay/browser/themes/shared/browser-mizu-command-palette.css
+  overlay/browser/themes/shared/browser-mizu-gestures.css
   overlay/browser/themes/shared/browser-mizu-video.css
   overlay/browser/themes/shared/mizu-video-player.svg
   patches/0001-set-mizu-application-identity.patch
@@ -80,6 +89,8 @@ required_files=(
   patches/0003-add-mizu-video-player.patch
   patches/0004-add-mizu-command-palette.patch
   patches/0006-add-mizu-link-hints.patch
+  patches/0007-add-mizu-mouse-gestures.patch
+  patches/0008-add-mizu-gesture-settings.patch
   packaging/arch/mizu.desktop
   packaging/arch/mizu.svg
   packaging/arch/package.sh
@@ -120,6 +131,70 @@ grep -q '_labels(' "$PROJECT_ROOT/overlay/browser/base/content/browser-mizu-hint
 grep -q 'openOrClosedShadowRoot' \
   "$PROJECT_ROOT/overlay/browser/actors/MizuHintsChild.sys.mjs" ||
   die "link hints do not descend into shadow roots"
+
+# Mouse gestures are split across processes without any message passing, so the
+# script, the suppression actor and the stylesheet all have to stay packaged,
+# and the defaults both halves read have to stay defined.
+for gestures_path in MizuGesturesChild.sys.mjs browser-mizu-gestures.js \
+  browser-mizu-gestures.css; do
+  grep -q "$gestures_path" \
+    "$PROJECT_ROOT/patches/0007-add-mizu-mouse-gestures.patch" ||
+    die "mouse gestures are not packaged: $gestures_path"
+done
+for gestures_pref in enabled button stroke-threshold rocker wheel trail status; do
+  grep -q "pref(\"mizu.gestures.$gestures_pref\"" \
+    "$PROJECT_ROOT/overlay/browser/branding/mizu/pref/firefox-branding.js" ||
+    die "missing mouse gesture default: $gestures_pref"
+done
+# Back and forward are the gestures nobody rebinds, so a missing default here is
+# a broken feature rather than a missing extra.
+for gestures_binding in pattern.L pattern.R pattern.U pattern.D \
+  rocker.back rocker.forward wheel.up wheel.down; do
+  grep -q "pref(\"mizu.gestures.$gestures_binding\"" \
+    "$PROJECT_ROOT/overlay/browser/branding/mizu/pref/firefox-branding.js" ||
+    die "missing mouse gesture binding: $gestures_binding"
+done
+# Without this the context menu opens on the press on Linux and macOS, and the
+# press is never free to be drawn with -- gestures are simply dead.
+grep -q 'pref("ui.context_menus.after_mouseup", true)' \
+  "$PROJECT_ROOT/overlay/browser/branding/mizu/pref/firefox-branding.js" ||
+  die "the context menu is not deferred to mouse release"
+# The parent cannot stop a page from acting on input a gesture already spent,
+# because it only reaches content after being dispatched there.
+grep -q 'stopPropagation' \
+  "$PROJECT_ROOT/overlay/browser/actors/MizuGesturesChild.sys.mjs" ||
+  die "mouse gestures do not withhold consumed input from the page"
+
+# The gesture settings pane. Everything it needs has to reach the build, or the
+# category appears with nothing behind it.
+for settings_path in config/mizu-gestures.mjs mizu-gesture-list.mjs \
+  mizu-gesture-list.css mizuGestures.ftl mizu-category-gestures.svg \
+  MizuGestureActions.sys.mjs; do
+  grep -q "$settings_path" \
+    "$PROJECT_ROOT/patches/0008-add-mizu-gesture-settings.patch" ||
+    die "gesture settings are not packaged: $settings_path"
+done
+# The pane is only reachable if it is both registered and in the category list.
+for settings_hook in 'mizu-gestures-pane-title' 'category-gestures' \
+  'preview/mizuGestures.ftl'; do
+  grep -q "$settings_hook" \
+    "$PROJECT_ROOT/patches/0008-add-mizu-gesture-settings.patch" ||
+    die "gesture settings are not reachable: $settings_hook"
+done
+# Recording goes through the browser's own recogniser rather than a second one
+# in the settings page, which is what keeps a recorded stroke readable later.
+for recording_pref in recording recorded; do
+  grep -q "pref(\"mizu.gestures.$recording_pref\"" \
+    "$PROJECT_ROOT/overlay/browser/branding/mizu/pref/firefox-branding.js" ||
+    die "missing gesture recording default: $recording_pref"
+done
+# One action catalogue, read by the window that runs gestures and by the pane
+# that offers them; two copies would drift.
+for actions_user in overlay/browser/base/content/browser-mizu-gestures.js \
+  overlay/browser/components/preferences/widgets/mizu-gesture-list/mizu-gesture-list.mjs; do
+  grep -q 'MizuGestureActions.sys.mjs' "$PROJECT_ROOT/$actions_user" ||
+    die "$actions_user does not use the shared gesture action catalogue"
+done
 
 # The video player spans chrome and content processes, so verify that the actor,
 # controller, stylesheet and defaults all remain connected to the build.

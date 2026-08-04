@@ -1,0 +1,60 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+.mizu-gesture-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-small);
+}
+
+.mizu-gesture-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-small);
+}
+
+/* The arrows carry the meaning of a row, so they are given the width to line
+ * up down the column even when the strokes differ in length. */
+.mizu-gesture-stroke {
+  flex: 0 0 auto;
+  min-width: 4em;
+  font-size: 1.2em;
+  letter-spacing: 0.1em;
+}
+
+.mizu-gesture-code {
+  flex: 0 0 auto;
+  min-width: 3.5em;
+  color: var(--text-color-deemphasized);
+  font-family: monospace;
+}
+
+/* Named rather than drawn: rockers and the wheel have no stroke to show, so
+ * their label takes the space the arrows and the code would have used. */
+.mizu-gesture-fixed {
+  flex: 0 0 auto;
+  min-width: 7.5em;
+}
+
+.mizu-gesture-action {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mizu-gesture-spacer {
+  flex: 0 0 auto;
+  width: var(--button-min-height);
+}
+
+.mizu-gesture-pending {
+  padding: var(--space-small);
+  border-radius: var(--border-radius-small);
+  background-color: var(--background-color-box);
+}
+
+.mizu-gesture-recording {
+  display: flex;
+  align-items: center;
+  gap: var(--space-small);
+}

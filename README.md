@@ -188,6 +188,97 @@ opening a duplicate.
 | `mizu.palette.max-results` | `14` | Maximum number of visible search results |
 | `mizu.palette.open-on-new-tab` | `true` | Open the palette on a newly selected new-tab page |
 
+## Mouse gestures
+
+Hold the right button over a page and draw. The stroke is drawn back over the
+content and the action it resolved to is named underneath it; releasing the
+button runs it, and the context menu that would have followed is withheld. A
+stroke that matches nothing still shows what Mizu read, so a gesture that does
+nothing is visibly a gesture that is not bound rather than one that failed.
+
+| Stroke | Action | Stroke | Action |
+| --- | --- | --- | --- |
+| ← | Back | ↑ | Scroll to top |
+| → | Forward | ↓ | Scroll to bottom |
+| ↑↓ | Reload | ↓↑ | New tab |
+| ↓→ | Close tab | ↓← | Reopen closed tab |
+| ↑← | Previous tab | ↑→ | Next tab |
+| →↑ | Duplicate tab | →↓ | Bookmark page |
+
+Two gestures need no drawing. Holding one button and clicking the other is a
+rocker: right-then-left goes back, left-then-right goes forward. Holding the
+right button and turning the wheel moves through the tabs.
+
+Recognition happens in the chrome process rather than in the page, which is
+what an add-on cannot do. A stroke is one stroke even when it crosses a
+cross-origin frame, a scrollbar or a page that swallows mouse events, the trail
+is drawn on chrome the page cannot style or cover, and gestures keep working
+where extension content scripts are not allowed to run.
+
+Actions are command names, and they are the same names Firefox's own touchpad
+gestures use: the id of a XUL `<command>` such as `cmd_close` or
+`Browser:NextTab`, or a controller command such as `cmd_scrollTop`. So any
+gesture can be pointed at anything either mechanism can reach, whether or not
+Mizu ships a default for it. A stroke is spelled with `U`, `D`, `L` and `R` in
+the order it is drawn, up to eight directions, so creating the string
+preference `mizu.gestures.pattern.ULD` adds that gesture. Setting one to an
+empty string removes it.
+
+### Changing them
+
+Settings has a Mouse gestures section listing every gesture with a menu of
+actions beside it. **Record a gesture** arms the browser and takes the next
+stroke you draw; give it an action and it is bound. Setting a gesture's action
+to a dash removes it.
+
+Recording is done by the browser rather than by the settings page, so the
+stroke is read by the same recogniser that will interpret it later, at the same
+threshold. A gesture therefore cannot be recorded in a form the browser goes on
+to read as something else.
+
+The pane is a view onto the preferences and nothing more, so `about:config`
+remains an equal way in and the two never disagree. To bind a stroke by hand,
+draw it first: one that nothing is bound to shows its own code rather than an
+action name, and that code is exactly what goes after `mizu.gestures.pattern.`
+— so drawing up, left, down reads `↑←↓  ULD`, and creating the string
+preference `mizu.gestures.pattern.ULD` with a value of `Browser:Screenshot`
+binds it. That is also the way to reach a command the menu does not offer; the
+pane keeps such a gesture listed and selected rather than rewriting it. New
+bindings take effect on the next gesture, and nothing needs restarting.
+
+| Preference | Default | Purpose |
+| --- | --- | --- |
+| `mizu.gestures.enabled` | `true` | Enable gestures, in both processes |
+| `mizu.gestures.button` | `2` | Which button draws, as a `MouseEvent` button |
+| `mizu.gestures.stroke-threshold` | `24` | Travel in pixels before a direction joins the stroke |
+| `mizu.gestures.rocker` | `true` | Hold one button and click the other |
+| `mizu.gestures.wheel` | `true` | Hold the gesture button and turn the wheel |
+| `mizu.gestures.trail` | `true` | Draw the stroke over the page |
+| `mizu.gestures.trail-width` | `3` | Trail width in pixels |
+| `mizu.gestures.trail-colour` | `#5ab9e0` | Trail colour |
+| `mizu.gestures.status` | `true` | Name the action the stroke resolved to |
+| `mizu.gestures.pattern.*` | see above | Command run by one stroke |
+| `mizu.gestures.rocker.back` | `Browser:BackOrBackDuplicate` | Right held, left clicked |
+| `mizu.gestures.rocker.forward` | `Browser:ForwardOrForwardDuplicate` | Left held, right clicked |
+| `mizu.gestures.wheel.up` | `Browser:PrevTab` | Gesture button held, wheel up |
+| `mizu.gestures.wheel.down` | `Browser:NextTab` | Gesture button held, wheel down |
+
+`mizu.gestures.recording` and `mizu.gestures.recorded` are how the settings
+pane asks for a stroke and is handed one; they are not settings.
+
+Mizu also defaults `ui.context_menus.after_mouseup` to `true`, so the context
+menu opens when the right button is released rather than when it is pressed.
+That is already how Windows behaves; without it, Linux and macOS open the menu
+under the pointer before a stroke can begin, and gestures cannot work at all.
+The cost is that a menu can no longer be used in one press-drag-release motion.
+
+One thing a page can still take: gestures are recognised anywhere in the
+content area, but the input a gesture consumes is only withheld from the frame
+the button was pressed in. A stroke begun in the page and released over an
+embedded frame still runs its command, and Firefox's context menu is still
+withheld, but that frame's own `contextmenu` handler may draw a menu of its
+own.
+
 ## Video player
 
 Mizu detects HTML video in the selected tab, including videos in site frames,

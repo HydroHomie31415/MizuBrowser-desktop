@@ -1,0 +1,100 @@
+# Register the Mizu mouse gestures actor, load its chrome script and its
+# stylesheet.
+#
+# Holding the right button over a page and drawing a stroke runs a command:
+# left goes back, down-then-right closes the tab. Rocker and wheel gestures
+# come with it. Recognition and the trail live in the chrome process, in
+# browser/base/content/browser-mizu-gestures.js, because only the parent sees a
+# stroke that crossed a cross-origin frame as one stroke.
+#
+# The actor is child-only and unconditional. It sends no messages and runs no
+# commands; it only takes back from the page the clicks, wheel and context menu
+# a gesture has already spent, which is the half the parent cannot do, because
+# a mouse event reaches content after it has been dispatched here.
+# mizu.gestures.enabled gates both sides.
+#
+# Each addition here sits outside the context of the Mizu patches before it,
+# which is why some of them are not where they would otherwise go: a line added
+# between another patch's context lines leaves that patch unable to apply or
+# reverse on its own, and ./mizu sync stops rather than let that pass.
+diff --git a/browser/actors/moz.build b/browser/actors/moz.build
+--- a/browser/actors/moz.build
++++ b/browser/actors/moz.build
+@@ -184,3 +184,10 @@ FINAL_TARGET_FILES.actors.anime4k += [
+ BROWSER_CHROME_MANIFESTS += [
+     "test/browser/browser.toml",
+ ]
++
++# Listed on its own rather than in the actors list above, which is bracketed by
++# the context of the video player and link hints patches; a line added inside
++# that stops those patches from applying and reversing on their own.
++FINAL_TARGET_FILES.actors += [
++    "MizuGesturesChild.sys.mjs",
++]
+diff --git a/browser/base/content/browser-main.js b/browser/base/content/browser-main.js
+--- a/browser/base/content/browser-main.js
++++ b/browser/base/content/browser-main.js
+@@ -38,6 +38,7 @@
+   if (AIWindow.isOpeningAIWindow(window)) {
+     ChromeUtils.importESModule("chrome://browser/content/urlbar/SmartbarInput.mjs", { global: "current" });
+   }
++  Services.scriptloader.loadSubScript("chrome://browser/content/browser-mizu-gestures.js", this);
+   ChromeUtils.importESModule("chrome://browser/content/urlbar/UrlbarInput.mjs", { global: "current" });
+ }
+ 
+diff --git a/browser/base/jar.mn b/browser/base/jar.mn
+--- a/browser/base/jar.mn
++++ b/browser/base/jar.mn
+@@ -56,6 +56,7 @@ browser.jar:
+         content/browser/browser-places.js                   (content/browser-places.js)
+         content/browser/browser-profiles.js                 (content/browser-profiles.js)
+         content/browser/browser-safebrowsing.js             (content/browser-safebrowsing.js)
++        content/browser/browser-mizu-gestures.js            (content/browser-mizu-gestures.js)
+         content/browser/browser-sets.js                     (content/browser-sets.js)
+         content/browser/browser-siteIdentity.js             (content/browser-siteIdentity.js)
+         content/browser/browser-sitePermissionPanel.js      (content/browser-sitePermissionPanel.js)
+diff --git a/browser/components/DesktopActorRegistry.sys.mjs b/browser/components/DesktopActorRegistry.sys.mjs
+--- a/browser/components/DesktopActorRegistry.sys.mjs
++++ b/browser/components/DesktopActorRegistry.sys.mjs
+@@ -357,6 +357,19 @@ let JSWINDOWACTORS = {
+     safeForUntrustedWebProcess: true,
+   },
+ 
++  MizuGestures: {
++    child: {
++      esModuleURI: "resource:///actors/MizuGesturesChild.sys.mjs",
++      events: {
++        mousedown: { capture: true },
++      },
++    },
++    matches: ["http://*/*", "https://*/*", "file:///*"],
++    allFrames: true,
++    messageManagerGroups: ["browsers"],
++    safeForUntrustedWebProcess: true,
++  },
++
+   BrowserTab: {
+     child: {
+       esModuleURI: "resource:///actors/BrowserTabChild.sys.mjs",
+diff --git a/browser/themes/shared/browser-shared.css b/browser/themes/shared/browser-shared.css
+--- a/browser/themes/shared/browser-shared.css
++++ b/browser/themes/shared/browser-shared.css
+@@ -8,6 +8,7 @@
+ @import url("chrome://browser/skin/addons/extension-controlled.css");
+ @import url("chrome://browser/skin/addons/unified-extensions.css");
+ @import url("chrome://browser/skin/downloads/indicator.css");
++@import url("chrome://browser/skin/browser-mizu-gestures.css");
+ @import url("chrome://browser/skin/tabbrowser/content-area.css");
+ @import url("chrome://browser/skin/tabbrowser/ctrlTab.css");
+ @import url("chrome://browser/skin/tabbrowser/fullscreen-and-pointerlock.css");
+diff --git a/browser/themes/shared/jar.inc.mn b/browser/themes/shared/jar.inc.mn
+--- a/browser/themes/shared/jar.inc.mn
++++ b/browser/themes/shared/jar.inc.mn
+@@ -33,6 +33,7 @@
+   skin/classic/browser/smartbar.css                            (../shared/smartbar.css)
+   skin/classic/browser/smartwindowGroupTabs.css                (../shared/smartwindowGroupTabs.css)
+   skin/classic/browser/toolbarbuttons.css                      (../shared/toolbarbuttons.css)
++  skin/classic/browser/browser-mizu-gestures.css               (../shared/browser-mizu-gestures.css)
+   skin/classic/browser/toolbarbutton-icons.css                 (../shared/toolbarbutton-icons.css)
+   skin/classic/browser/urlbar/badge-bookmark.svg               (../shared/urlbar/icons/badge-bookmark.svg)
+   skin/classic/browser/urlbar/badge-history.svg                (../shared/urlbar/icons/badge-history.svg)

@@ -1,0 +1,49 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+
+/* Mizu mouse gestures. See browser/base/content/browser-mizu-gestures.js.
+ *
+ * The overlay is a sibling of #browser at the end of the window body, so the
+ * ordinary z-index in the browser area -- toolbox 0 through the revealed
+ * sidebar 4 -- is what it has to clear, and it is taken out of flow so that
+ * adding it to the window mid-gesture cannot move anything underneath it.
+ * It exists only while a stroke is being drawn. */
+
+#mizu-gesture-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  pointer-events: none;
+}
+
+#mizu-gesture-trail {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#mizu-gesture-status {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 10%;
+  margin-inline: auto;
+  width: fit-content;
+  max-width: 80%;
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: light-dark(rgb(255 255 255 / 92%), rgb(28 27 34 / 92%));
+  box-shadow: 0 2px 12px rgb(0 0 0 / 35%);
+  color: inherit;
+  font: message-box;
+  font-size: 1.1em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A stroke nothing is bound to still shows its arrows, so the user can see
+ * what Mizu read rather than guessing why nothing happened. */
+#mizu-gesture-status[unbound] {
+  opacity: 0.6;
+}

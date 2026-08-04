@@ -60,6 +60,59 @@ pref("mizu.hints.detect-listeners", true);
 // against a scrolled root frame; see MizuHintsChild's #click.
 pref("mizu.hints.trusted-click", false);
 
+// Mouse gestures. Hold the right button over a page and draw a stroke to run a
+// command. See browser/base/content/browser-mizu-gestures.js.
+pref("mizu.gestures.enabled", true);
+// Which button draws, as a MouseEvent button value: 2 is the right button.
+pref("mizu.gestures.button", 2);
+// How far the pointer has to travel along one axis before that direction joins
+// the stroke. Small values turn an unsteady hand into extra directions.
+pref("mizu.gestures.stroke-threshold", 24);
+// Rocker gestures: hold one button and click the other. Wheel gestures: hold
+// the gesture button and turn the wheel.
+pref("mizu.gestures.rocker", true);
+pref("mizu.gestures.wheel", true);
+// Draw the stroke over the page, and name the action it resolved to.
+pref("mizu.gestures.trail", true);
+pref("mizu.gestures.trail-width", 3);
+pref("mizu.gestures.trail-colour", "#5ab9e0");
+pref("mizu.gestures.status", true);
+
+// What each gesture runs. The value is a command: the id of a XUL <command> in
+// browser-sets.inc.xhtml, or the name of a controller command such as
+// cmd_scrollTop, which is the same vocabulary Firefox's own touchpad gestures
+// use. Any stroke of up to eight directions works, spelled with U, D, L and R
+// in the order they were drawn, so adding mizu.gestures.pattern.ULD adds a
+// gesture. An empty value unbinds one.
+pref("mizu.gestures.pattern.L", "Browser:BackOrBackDuplicate");
+pref("mizu.gestures.pattern.R", "Browser:ForwardOrForwardDuplicate");
+pref("mizu.gestures.pattern.U", "cmd_scrollTop");
+pref("mizu.gestures.pattern.D", "cmd_scrollBottom");
+pref("mizu.gestures.pattern.UD", "Browser:ReloadOrDuplicate");
+pref("mizu.gestures.pattern.DU", "cmd_newNavigatorTab");
+pref("mizu.gestures.pattern.DR", "cmd_close");
+pref("mizu.gestures.pattern.DL", "History:UndoCloseTab");
+pref("mizu.gestures.pattern.UL", "Browser:PrevTab");
+pref("mizu.gestures.pattern.UR", "Browser:NextTab");
+pref("mizu.gestures.pattern.RU", "Browser:DuplicateTab");
+pref("mizu.gestures.pattern.RD", "Browser:AddBookmarkAs");
+pref("mizu.gestures.rocker.back", "Browser:BackOrBackDuplicate");
+pref("mizu.gestures.rocker.forward", "Browser:ForwardOrForwardDuplicate");
+pref("mizu.gestures.wheel.up", "Browser:PrevTab");
+pref("mizu.gestures.wheel.down", "Browser:NextTab");
+
+// Set by the settings pane while it waits to be handed a stroke. The window's
+// gesture handler then records the next one instead of acting on it, and
+// writes it here. Both are internal to that exchange.
+pref("mizu.gestures.recording", false);
+pref("mizu.gestures.recorded", "");
+
+// Open the context menu when the right button is released rather than when it
+// is pressed, which is what leaves the press free to be drawn with. This is
+// already the behaviour on Windows; on Linux and macOS the menu would
+// otherwise open under the pointer before a gesture could start.
+pref("ui.context_menus.after_mouseup", true);
+
 // YouTube. Remove Shorts shelves and links, and open direct Shorts URLs in the
 // standard watch page so they get the full Mizu player experience.
 pref("mizu.youtube.remove-shorts", true);
