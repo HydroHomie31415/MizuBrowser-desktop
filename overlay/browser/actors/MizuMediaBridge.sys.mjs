@@ -448,8 +448,9 @@ export class MizuMediaBridge {
       }
       out.push({
         id: `native:${index}`,
-        label:
-          text(track.label) || text(track.language) || `Track ${index + 1}`,
+        label: isArtplayerSubtitle(track)
+          ? text(track.language) || "Subtitles"
+          : text(track.label) || text(track.language) || `Track ${index + 1}`,
         language: text(track.language),
         active: track.mode != "disabled",
       });
@@ -867,7 +868,31 @@ function splitId(id) {
 }
 
 function isSubtitle(track) {
-  return track.kind == "subtitles" || track.kind == "captions";
+  return (
+    track.kind == "subtitles" ||
+    track.kind == "captions" ||
+    isArtplayerSubtitle(track)
+  );
+}
+
+/**
+ * Artplayer deliberately attaches parsed SRT/ASS cues as a metadata track and
+ * renders them itself. Treat it as subtitles only when it really carries text
+ * cues; other metadata tracks may contain chapters or thumbnail information.
+ */
+function isArtplayerSubtitle(track) {
+  if (track.kind != "metadata" || !/^Artplayer$/i.test(text(track.label))) {
+    return false;
+  }
+  try {
+    let count = Math.min(track.cues?.length || 0, 20);
+    for (let index = 0; index < count; index++) {
+      if (String(track.cues[index]?.text ?? "").trim()) {
+        return true;
+      }
+    }
+  } catch (_) {}
+  return false;
 }
 
 /** Page values are untrusted, so they are flattened to short plain strings. */

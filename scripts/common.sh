@@ -7,12 +7,17 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_ROOT=$(cd -- "$SCRIPT_DIR/.." && pwd)
-FIREFOX_DIR="$PROJECT_ROOT/firefox"
 
 # shellcheck source=../config/upstream.env
 source "$PROJECT_ROOT/config/upstream.env"
 # shellcheck source=../config/extensions.env
 source "$PROJECT_ROOT/config/extensions.env"
+
+# The unattended updater builds a candidate revision in a throwaway workspace so
+# an interactive checkout is never disturbed mid-session. Everything downstream
+# (fetch, sync, build, package) honours these, so it reuses the same pipeline.
+FIREFOX_DIR=${MIZU_FIREFOX_DIR:-"$PROJECT_ROOT/firefox"}
+FIREFOX_REVISION=${MIZU_FIREFOX_REVISION:-$FIREFOX_REVISION}
 
 die() {
   printf 'error: %s\n' "$*" >&2

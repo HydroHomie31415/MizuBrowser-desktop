@@ -242,6 +242,9 @@ grep -Fq 'header.controls-visible,footer.controls-visible' \
 grep -q 'seekPreview(time, fraction)' \
   "$PROJECT_ROOT/overlay/browser/actors/MizuMediaBridge.sys.mjs" ||
   die "video seek previews are not connected to page thumbnail metadata"
+grep -q 'isArtplayerSubtitle(track)' \
+  "$PROJECT_ROOT/overlay/browser/actors/MizuMediaBridge.sys.mjs" ||
+  die "Artplayer timed-text metadata is not recognized as subtitles"
 grep -q 'class="seek-preview"' \
   "$PROJECT_ROOT/overlay/browser/actors/MizuVideoChild.sys.mjs" ||
   die "video seek preview UI is missing"

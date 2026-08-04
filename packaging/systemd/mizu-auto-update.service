@@ -1,0 +1,26 @@
+[Unit]
+Description=Rebuild Mizu against the newest upstream Firefox release
+Documentation=https://github.com/HydroHomie/MizuBrowser-desktop
+# A rebuild is a large source fetch plus a compile; do not start without a route.
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Documents/Projects/MizuBrowser-desktop
+ExecStart=%h/Documents/Projects/MizuBrowser-desktop/mizu auto-update
+
+# Artifact builds are the point of the daily cadence; a full build takes hours
+# and should be run deliberately, not on a timer.
+Environment=MIZU_BUILD_MODE=artifact
+
+# Never let an update compete with interactive work for CPU or disk.
+Nice=15
+IOSchedulingClass=idle
+CPUSchedulingPolicy=batch
+
+# Bound a hung fetch or compile so the timer cannot wedge permanently.
+TimeoutStartSec=4h
+
+[Install]
+WantedBy=default.target

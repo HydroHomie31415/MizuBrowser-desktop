@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily check for a newer upstream Firefox to rebuild Mizu against
+
+[Timer]
+OnCalendar=daily
+# Spread the run off the hour so a fetch does not land with every other timer.
+RandomizedDelaySec=2h
+# Catch up after the machine was off; a missed day is a missed security rebuild.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

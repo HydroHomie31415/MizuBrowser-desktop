@@ -84,7 +84,8 @@ The resulting package is written to `dist/` and can be installed with
 | `./mizu package` | Produce a release-style archive |
 | `./mizu arch-package VERSION` | Produce a pacman-installable Arch package |
 | `./mizu clobber` | Clean the selected object directory |
-| `./mizu upstream-check` | Compare the pin with upstream `main` |
+| `./mizu upstream-check` | Compare the pin with upstream `FIREFOX_BRANCH` |
+| `./mizu auto-update` | Rebuild against the newest upstream commit and stage a package |
 | `./mizu status` | Show configuration, checkout, and source changes |
 | `./mizu test` | Validate this repository without downloading Firefox |
 
@@ -567,6 +568,55 @@ After reviewing Firefox release and security notes, replace
 `FIREFOX_REVISION` in `config/upstream.env` with the reported commit, then run
 `./mizu fetch` and `./mizu build`. Fetch will not switch revisions while
 tracked upstream files have local changes.
+
+### Unattended updates
+
+Mizu is a source fork, so there is no binary update to download. Mozilla's
+signed MAR updates carry stock Firefox binaries and would overwrite every Mizu
+patch, which is why the in-tree updater stays disabled. Staying current instead
+means re-pinning, re-applying the patches, and rebuilding.
+
+```bash
+./mizu auto-update
+```
+
+`auto-update` resolves the newest commit on `FIREFOX_BRANCH`, builds it in a
+throwaway checkout under `.cache/auto-update/`, and stages a verified package in
+`dist/`. It never touches the installed browser or the interactive `firefox/`
+checkout, and it stops at the first failure:
+
+1. **Patch gate.** Every patch must apply to the candidate revision. This is the
+   expected failure as upstream drifts, and it is reported as patches needing a
+   rebase rather than as a crash. Nothing is built until it passes.
+2. **Smoke test.** The new binary must report its version and paint a headless
+   screenshot, so a build that cannot start never reaches `dist/`.
+3. **Staging.** On success the pin is rewritten (`--no-pin` skips this) and the
+   two newest packages are kept, so the previous build stays available to roll
+   back to.
+
+Install the staged package yourself:
+
+```bash
+sudo pacman -U dist/mizu-browser-*.pkg.tar.zst
+```
+
+Run it daily with the bundled user timer:
+
+```bash
+install -Dm644 -t ~/.config/systemd/user packaging/systemd/mizu-auto-update.*
+systemctl --user daemon-reload
+systemctl --user enable --now mizu-auto-update.timer
+```
+
+Check on it with `./mizu status`, `systemctl --user list-timers`, or the logs in
+`.cache/auto-update/logs/`.
+
+**Choosing a branch.** `FIREFOX_BRANCH` defaults to `release`, the stabilized
+line Mozilla's security advisories map to. `main` is mozilla-central (Nightly):
+newer code, but unreviewed and not a security-patch stream. Artifact builds
+support both — `releases/mozilla-release` is the default artifact tree — so the
+daily cadence is affordable either way. Patches are written against whichever
+branch you develop on, and will not apply to the other until rebased.
 
 ## Distribution checklist
 

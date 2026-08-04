@@ -27,6 +27,7 @@ Commands:
   arch-package    Create a pacman-installable Arch Linux package
   clobber         Clean the selected Firefox object directory
   upstream-check  Compare the source pin with upstream main
+  auto-update     Rebuild against the newest upstream commit and stage a package
   status          Show configuration and checkout state
   test            Validate this repository without fetching Firefox
   help            Show this help
@@ -43,6 +44,9 @@ case "$command_name" in
     ;;
   upstream-check)
     exec "$PROJECT_ROOT/scripts/upstream-check.sh" "$@"
+    ;;
+  auto-update)
+    exec "$PROJECT_ROOT/scripts/auto-update.sh" "$@"
     ;;
   run)
     # shellcheck source=scripts/common.sh
