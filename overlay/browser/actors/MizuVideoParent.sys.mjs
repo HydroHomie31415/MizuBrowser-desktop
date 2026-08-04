@@ -108,10 +108,8 @@ export class MizuVideoParent extends JSWindowActorParent {
       AUTO_OPENED.delete(browser);
       return;
     }
-    let win = browser.ownerGlobal;
     if (
       !state.playing ||
-      browser != win?.gBrowser?.selectedBrowser ||
       AUTO_OPENED.has(browser) ||
       AUTO_OPENING.has(browser) ||
       !Services.prefs.getBoolPref("mizu.video.auto-open", true) ||
