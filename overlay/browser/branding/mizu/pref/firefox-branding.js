@@ -42,6 +42,24 @@ pref("mizu.palette.enabled", true);
 pref("mizu.palette.max-results", 14);
 pref("mizu.palette.open-on-new-tab", true);
 
+// Link hints. Ctrl+G labels every clickable element in the tab; typing a label
+// activates it, and Ctrl+Shift+G opens links in a background tab instead.
+pref("mizu.hints.enabled", true);
+// The alphabet labels are drawn from, home row first so the common hints are
+// the ones the fingers are already resting on. Duplicates are ignored.
+pref("mizu.hints.characters", "sadfjklewcmpgh");
+// Ctrl+G is find-again upstream; F3 still does that. Set any KeyboardEvent
+// code here to move the shortcut, e.g. "KeyF".
+pref("mizu.hints.key-code", "KeyG");
+// Also hint elements that are only clickable because a script attached a
+// listener to them, which is most controls a modern site builds out of divs.
+// Turn off if a very large page takes too long to label.
+pref("mizu.hints.detect-listeners", true);
+// Send the activation click through the widget layer so the page receives a
+// trusted event. Off until the widget coordinate mapping has been confirmed
+// against a scrolled root frame; see MizuHintsChild's #click.
+pref("mizu.hints.trusted-click", false);
+
 // YouTube. Remove Shorts shelves and links, and open direct Shorts URLs in the
 // standard watch page so they get the full Mizu player experience.
 pref("mizu.youtube.remove-shorts", true);
@@ -50,6 +68,7 @@ pref("media.videocontrols.picture-in-picture.keyboard-controls.enabled", true);
 
 // Mizu Video Player. These preferences are also editable from the settings
 // panel inside the player, and apply to the next player that is opened.
+pref("mizu.video.auto-open", true);
 pref("mizu.video.seek-backward-seconds", 10);
 pref("mizu.video.seek-forward-seconds", 10);
 pref("mizu.video.volume-step-percent", 5);

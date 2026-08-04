@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Mizu link hints</title>
+  </head>
+  <body>
+    <a id="link" href="#went">A link</a>
+    <button id="button">A button</button>
+    <!-- No href, no role, no onclick: only the listener below makes this a
+         control, so it is what proves listener detection still works. -->
+    <div id="widget" style="width: 120px; height: 24px">A div</div>
+    <!-- Enough further targets that the alphabet runs out and the labels have
+         to grow a second character, which is what makes narrowing testable. -->
+    <div id="filler"></div>
+    <script>
+      let filler = document.getElementById("filler");
+      for (let i = 0; i < 20; i++) {
+        let link = document.createElement("a");
+        link.href = `#filler-${i}`;
+        link.textContent = `Filler ${i}`;
+        filler.append(link, document.createElement("br"));
+      }
+      window.clicked = [];
+      window.keys = [];
+      for (let id of ["link", "button", "widget"]) {
+        document.getElementById(id).addEventListener("click", () => {
+          window.clicked.push(id);
+        });
+      }
+      window.addEventListener(
+        "keydown",
+        event => window.keys.push(event.key),
+        true
+      );
+    </script>
+  </body>
+</html>

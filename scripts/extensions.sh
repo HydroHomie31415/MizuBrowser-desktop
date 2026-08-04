@@ -3,10 +3,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-# Installs the extensions pinned in config/extensions.env into the build's
-# distribution directory. Firefox copies add-ons found there into each new
-# profile on first run, so they ship enabled but stay ordinary add-ons the user
-# can disable or remove.
+# Installs the extensions pinned in config/extensions.env and Mizu's companion
+# browser policies into the build's distribution directory. Firefox copies
+# add-ons found there into profiles, so they ship enabled but stay ordinary
+# add-ons the user can disable or remove.
 
 set -euo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/common.sh"
@@ -87,6 +87,8 @@ objdir="$FIREFOX_DIR/obj-mizu-$(build_mode)"
 
 dist_dir="$objdir/dist/bin/distribution/extensions"
 mkdir -p "$dist_dir"
+cp "$PROJECT_ROOT/config/policies.json" "${dist_dir%/extensions}/policies.json"
+note "Installed Mizu browser policies"
 
 for prefix in $MIZU_EXTENSIONS; do
   id=$(field "$prefix" ID)

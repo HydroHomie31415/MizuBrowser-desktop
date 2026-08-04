@@ -230,6 +230,7 @@ export class MizuVideoChild extends JSWindowActorChild {
     return {
       hasVideo: true,
       playing: !video.paused && !video.ended && video.readyState >= 2,
+      playerOpen: !!this._player,
       area: Math.round(Math.max(0, rect.width) * Math.max(0, rect.height)),
       duration: Number.isFinite(video.duration) ? video.duration : 0,
     };
@@ -252,6 +253,10 @@ export class MizuVideoChild extends JSWindowActorChild {
   }
 
   _open({ settings, targetIdentifier }) {
+    if (this._player) {
+      this._player.close();
+      return true;
+    }
     let video = targetIdentifier
       ? ContentDOMReference.resolve(targetIdentifier)
       : this._bestVideo();
@@ -259,7 +264,6 @@ export class MizuVideoChild extends JSWindowActorChild {
       throw new Error("The selected video is no longer available");
     }
 
-    this._player?.close();
     this._player = new Player(this, video, settings);
     this._player.open();
     return true;
@@ -375,6 +379,9 @@ class Player {
     this.chapters = [];
     this.playlistState = { available: false, previous: false, next: false };
     this.pageCaptions = null;
+    this.pageCaptionSource = null;
+    this.pageCaptionObserver = null;
+    this.captionsWarned = false;
     this._boundVideoUpdate = () => this._updateControls();
     this._boundCueUpdate = () => this._renderCues();
   }
@@ -427,6 +434,7 @@ class Player {
     this.window.clearInterval(this.mediaTimer);
     this._watchTextTrack(null);
     this._releasePageCaptions();
+    this.bridge?.destroy();
     this._stopAnime4K();
     this.guard?.disconnect();
     for (let { target, type, handler, capture } of this.listeners) {
@@ -1370,6 +1378,7 @@ class Player {
 
     this._applyPreferredQuality(levels);
     this._enableSubtitlesOnce(subtitles);
+    this.bridge.prepareActiveTextTrack();
     this._watchTextTrack(this.bridge.activeTextTrack());
     this._adoptPageCaptions();
     this.subtitleTracks = subtitles;
@@ -1484,12 +1493,12 @@ class Player {
   }
 
   /**
-   * Adopts the site player's own caption layer when it has one.
+   * Shows the site player's own caption layer when it has one.
    *
    * Some players never create a text track at all: they parse the subtitle file
-   * themselves and write into a div next to the video. Moving that div into the
-   * player keeps those subtitles working, even though the player's own styling
-   * cannot reach inside it.
+   * themselves and write into a div next to the video. DOM output is mirrored
+   * so the renderer remains connected to its player; canvas output is moved
+   * because canvas pixels cannot be cloned.
    */
   _adoptPageCaptions() {
     // A text track that actually carries cues is rendered by the player, and
@@ -1500,15 +1509,29 @@ class Player {
       this._releasePageCaptions();
       return;
     }
-    if (this.pageCaptions?.isConnected) {
+    if (
+      this.pageCaptions?.isConnected &&
+      (!this.pageCaptionSource || this.pageCaptionSource.isConnected)
+    ) {
       return;
     }
+    this._releasePageCaptions();
 
     let found = this._findCaptionLayer();
     if (!found) {
+      this._reportMissingCaptions();
       return;
     }
-    this.pageCaptions = found;
+    let canvasRenderer =
+      found.localName == "canvas" ||
+      found.matches?.(".libassjs-canvas-parent, .jassub-canvas-parent") ||
+      !!found.querySelector?.("canvas.libassjs-canvas, canvas.jassub-canvas");
+    // DOM caption renderers often stop updating as soon as their live element
+    // leaves the player that owns it. Keep that element in place and mirror its
+    // rendered children instead. A canvas has no cloneable pixels, so libass
+    // renderers still have to be moved as a unit.
+    this.pageCaptionSource = canvasRenderer ? null : found;
+    this.pageCaptions = canvasRenderer ? found : found.cloneNode(true);
     this.pageCapturesHome = {
       parent: found.parentNode,
       next: found.nextSibling,
@@ -1517,39 +1540,100 @@ class Player {
     // Its offsets resolve against the stage once it is slotted, which is the
     // same shape of box it came from. Only a statically positioned layer needs
     // help, because nothing would anchor it over the video.
-    if (this.window.getComputedStyle(found).position == "static") {
-      found.style.position = "absolute";
-      found.style.inset = "auto 0 6% 0";
+    if (this.window.getComputedStyle(this.pageCaptions).position == "static") {
+      this.pageCaptions.style.position = "absolute";
+      this.pageCaptions.style.inset = "auto 0 6% 0";
     }
-    found.setAttribute("slot", "page-captions");
-    this.host.appendChild(found);
+    this.pageCaptions.setAttribute("slot", "page-captions");
+    this.host.appendChild(this.pageCaptions);
+    if (this.pageCaptionSource) {
+      this.pageCaptionObserver = new this.window.MutationObserver(() =>
+        this._syncPageCaptions()
+      );
+      this.pageCaptionObserver.observe(this.pageCaptionSource, {
+        attributes: true,
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
+    }
+    // A renderer that draws into a canvas sizes it from the video's box when it
+    // starts and only recomputes on a resize, so the move has to be announced
+    // or the subtitles stay laid out for a box the video no longer occupies.
+    this._nudgeLayout();
     this._toast("Using this site's own subtitles");
+  }
+
+  /** Copies the current output of a DOM caption renderer into its overlay. */
+  _syncPageCaptions() {
+    let source = this.pageCaptionSource;
+    let mirror = this.pageCaptions;
+    if (!source?.isConnected || !mirror?.isConnected) {
+      return;
+    }
+    for (let attribute of [...mirror.attributes]) {
+      if (attribute.name != "slot") {
+        mirror.removeAttribute(attribute.name);
+      }
+    }
+    for (let attribute of source.attributes) {
+      if (attribute.name != "slot") {
+        mirror.setAttribute(attribute.name, attribute.value);
+      }
+    }
+    mirror.setAttribute("slot", "page-captions");
+    mirror.replaceChildren(
+      ...[...source.childNodes].map(node => node.cloneNode(true))
+    );
+    if (this.window.getComputedStyle(mirror).position == "static") {
+      mirror.style.position = "absolute";
+      mirror.style.inset = "auto 0 6% 0";
+    }
+  }
+
+  /**
+   * Tells the page its boxes moved, without handing it anything privileged.
+   *
+   * The event is untrusted, which is all a layout listener needs, and it is the
+   * only signal these renderers share: they listen for it to re-measure.
+   */
+  _nudgeLayout() {
+    try {
+      this.window.dispatchEvent(new this.window.Event("resize"));
+    } catch (_) {}
+  }
+
+  /**
+   * Says so, once, when a track is selected but nothing can draw it.
+   *
+   * Staying silent here looks exactly like a video that has no subtitles at
+   * all, which sends people looking in the wrong place.
+   */
+  _reportMissingCaptions() {
+    if (
+      this.captionsWarned ||
+      !(this.subtitleTracks ?? []).some(track => track.active)
+    ) {
+      return;
+    }
+    this.captionsWarned = true;
+    this._toast("This site draws its own subtitles, which could not be found");
   }
 
   /**
    * Finds the element a site player draws its subtitles into.
    *
    * Players put this layer beside the video's container rather than inside it,
-   * so the search covers the whole document. The named selectors are tried
-   * first; the loose one after them only accepts overlays, because "caption"
-   * appears in the class names of plenty of menus and buttons too.
+   * so the search covers the whole document rather than the player's subtree.
    *
    * @returns {Element|null}
    */
   _findCaptionLayer() {
-    let candidates = [
-      ...this.document.querySelectorAll(CAPTION_SELECTORS),
-    ].filter(element => !this.host.contains(element));
+    // The document alone answers for all but the custom-element players, so the
+    // shadow trees are only walked once nothing there has matched either list.
+    let candidates = this._captionCandidates([this.document]);
     if (!candidates.length) {
-      candidates = [
-        ...this.document.querySelectorAll(LOOSE_CAPTION_SELECTORS),
-      ].filter(element => {
-        if (this.host.contains(element) || element.closest("button, select")) {
-          return false;
-        }
-        let style = this.window.getComputedStyle(element);
-        return style.position == "absolute" || style.position == "fixed";
-      });
+      candidates = this._captionCandidates(this._shadowRoots());
     }
     if (!candidates.length) {
       return null;
@@ -1557,17 +1641,111 @@ class Player {
     // The one closest to where the video came from is the one that belongs to
     // it, which matters on pages carrying more than one player.
     let home = this.original.parent;
-    return (
+    let found =
       candidates.find(element => home?.contains?.(element)) ??
       candidates.find(element => element.contains?.(home)) ??
-      candidates[0]
+      candidates[0];
+    // A libass-style renderer draws into a bare canvas that a wrapper positions
+    // over the video. Taking the canvas alone would leave that positioning
+    // behind, so the wrapper goes instead when it holds nothing else.
+    let wrapper = found.parentElement;
+    if (found.localName == "canvas" && wrapper?.childElementCount == 1) {
+      found = wrapper;
+    }
+    return found;
+  }
+
+  /**
+   * A layer the site has switched off draws nothing wherever it is put, and
+   * adopting one means the real layer is never looked for again. Caption menus
+   * are the usual source of these, since they match on class as readily as the
+   * layer does.
+   */
+  _isDrawable(element) {
+    let style = this.window.getComputedStyle(element);
+    return style.display != "none" && style.visibility != "hidden";
+  }
+
+  /**
+   * Layers worth adopting from the given trees.
+   *
+   * The named selectors are tried across all of them before the loose one is
+   * tried anywhere, because a real match in a second tree beats a guess in the
+   * first: "caption" appears in the class names of plenty of menus and buttons.
+   *
+   * @param {(Document|ShadowRoot)[]} roots Trees to search.
+   * @returns {Element[]}
+   */
+  _captionCandidates(roots) {
+    let named = [];
+    let loose = [];
+    for (let root of roots) {
+      named.push(...root.querySelectorAll(CAPTION_SELECTORS));
+      loose.push(...root.querySelectorAll(LOOSE_CAPTION_SELECTORS));
+    }
+    let usable = named.filter(
+      element => !this.host.contains(element) && this._isDrawable(element)
     );
+    if (usable.length) {
+      return usable;
+    }
+    return loose.filter(element => {
+      if (this.host.contains(element) || !this._isDrawable(element)) {
+        return false;
+      }
+      if (element.closest("button, select")) {
+        return false;
+      }
+      let style = this.window.getComputedStyle(element);
+      return style.position == "absolute" || style.position == "fixed";
+    });
+  }
+
+  /**
+   * Every shadow tree below the document.
+   *
+   * Embedded players are commonly custom elements now, and a caption layer
+   * inside a shadow root is invisible to a plain document query.
+   *
+   * @returns {ShadowRoot[]}
+   */
+  _shadowRoots() {
+    let all = [];
+    let roots = [this.document];
+    for (let depth = 0; depth < CAPTION_SHADOW_DEPTH && roots.length; depth++) {
+      let next = [];
+      for (let root of roots) {
+        for (let element of root.querySelectorAll("*")) {
+          try {
+            // Privileged code can see into a closed root, which is where a
+            // player that hides its internals keeps the layer.
+            let shadow = element.openOrClosedShadowRoot ?? element.shadowRoot;
+            if (shadow) {
+              next.push(shadow);
+            }
+          } catch (_) {}
+        }
+      }
+      all.push(...next);
+      roots = next;
+    }
+    return all;
   }
 
   _releasePageCaptions() {
+    this.pageCaptionObserver?.disconnect();
+    this.pageCaptionObserver = null;
+    if (this.pageCaptionSource) {
+      this.pageCaptions?.remove();
+      this.pageCaptions = null;
+      this.pageCaptionSource = null;
+      this.pageCapturesHome = null;
+      return;
+    }
     let home = this.pageCapturesHome;
     if (!this.pageCaptions || !home?.parent?.isConnected) {
       this.pageCaptions = null;
+      this.pageCapturesHome = null;
       return;
     }
     this.pageCaptions.removeAttribute("slot");
@@ -1578,6 +1756,7 @@ class Player {
     }
     home.parent.insertBefore(this.pageCaptions, home.next);
     this.pageCaptions = null;
+    this.pageCapturesHome = null;
   }
 
   _openMenu(kind) {
@@ -1862,13 +2041,27 @@ const CAPTION_SELECTORS = [
   ".dplayer-subtitle",
   ".shaka-text-container",
   ".video-js .vjs-text-track-display",
+  ".vds-captions",
+  ".fp-captions",
+  ".mejs__captions-layer",
+  // Styled subtitles are drawn to a canvas by a libass build rather than laid
+  // out as text, and neither renderer names its layer after captions at all.
+  ".libassjs-canvas-parent",
+  "canvas.libassjs-canvas",
+  ".jassub-canvas-parent",
+  "canvas.jassub-canvas",
 ].join(",");
 
 const LOOSE_CAPTION_SELECTORS = [
   "[class*=caption i]",
   "[class*=subtitle i]",
   "[class*=text-track i]",
+  "[id*=caption i]",
+  "[id*=subtitle i]",
 ].join(",");
+
+/** How far below the document shadow roots are followed looking for a layer. */
+const CAPTION_SHADOW_DEPTH = 4;
 
 const SUBTITLE_COLOURS = {
   white: "#ffffff",
@@ -1965,7 +2158,7 @@ const PLAYER_STYLES = `
   :host([subtitle-background=solid]) .subtitle-line { background:#000; }
   :host([subtitle-edge=outline]) .subtitles { paint-order:stroke fill; -webkit-text-stroke:.09em #000; }
   :host([subtitle-edge=shadow]) .subtitles { text-shadow:0 .06em .12em #000, 0 0 .3em rgba(0,0,0,.8); }
-  /* The adopted layer keeps its own offsets: a player positions its captions
+  /* The mirrored or adopted layer keeps its own offsets: a player positions it
      itself, and overriding that stacks every line at the top of the frame. */
   ::slotted([slot=page-captions]) { z-index:4!important; pointer-events:none!important; margin:0!important; }
   .menu { position:absolute; z-index:7; right:16px; bottom:96px; min-width:190px; max-height:56%; overflow:auto; padding:6px; border-radius:8px; background:#2b2a33; box-shadow:0 8px 30px rgba(0,0,0,.5); }

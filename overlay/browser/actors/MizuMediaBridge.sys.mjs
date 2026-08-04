@@ -32,6 +32,9 @@ export class MizuMediaBridge {
     // is treated as hostile input.
     this.page = window.wrappedJSObject;
     this.pageVideo = video.wrappedJSObject ?? video;
+    this.generatedTracks = new Map();
+    this.failedTracks = new Map();
+    this.pendingTrack = "";
   }
 
   /**
@@ -141,6 +144,62 @@ export class MizuMediaBridge {
       return track;
     }
     return null;
+  }
+
+  /**
+   * Gives JW Player captions a real TextTrack for Mizu to render.
+   *
+   * JW renders WebVTT into its own DOM without attaching it to the video. That
+   * renderer stops advancing once the video leaves JW's container, so Mizu
+   * fetches the selected VTT file, gives it a same-origin blob URL, and lets
+   * Gecko parse and time the cues instead.
+   */
+  prepareActiveTextTrack() {
+    let player = this.#jw();
+    let current = Number(this.#call(player, "getCurrentCaptions")) || 0;
+    if (!player || current < 1) {
+      return;
+    }
+    let config = this.#call(player, "getConfig");
+    let descriptor;
+    try {
+      descriptor = config?.tracks?.[current - 1];
+    } catch (_) {
+      return;
+    }
+    let file = subtitleFile(descriptor?.file);
+    if (!file) {
+      return;
+    }
+    let existing = this.generatedTracks.get(file);
+    if (existing) {
+      this.#activateGeneratedTrack(file);
+      return;
+    }
+    if (this.pendingTrack == file) {
+      return;
+    }
+    let failedAt = this.failedTracks.get(file) || 0;
+    if (Date.now() - failedAt < SUBTITLE_RETRY_MS) {
+      return;
+    }
+    this.pendingTrack = file;
+    this.#loadTextTrack(file, descriptor).finally(() => {
+      if (this.pendingTrack == file) {
+        this.pendingTrack = "";
+      }
+    });
+  }
+
+  /** Removes blob-backed tracks created by {@link prepareActiveTextTrack}. */
+  destroy() {
+    for (let { element, url } of this.generatedTracks.values()) {
+      element.remove();
+      this.window.URL.revokeObjectURL(url);
+    }
+    this.generatedTracks.clear();
+    this.failedTracks.clear();
+    this.pendingTrack = "";
   }
 
   /**
@@ -462,6 +521,102 @@ export class MizuMediaBridge {
 
   // -- writers --------------------------------------------------------------
 
+  async #loadTextTrack(file, descriptor) {
+    let objectURL = "";
+    let element = null;
+    try {
+      let url = new this.window.URL(file, this.window.location.href);
+      if (url.protocol != "https:" && url.protocol != "http:") {
+        return;
+      }
+      let response = await this.window.fetch(url.href, {
+        credentials: "omit",
+      });
+      if (!response.ok) {
+        throw new Error(`Subtitle request failed: ${response.status}`);
+      }
+      let body = await this.#limitedText(response);
+      if (!/^\uFEFF?WEBVTT(?:[ \t]|\r?$)/m.test(body.slice(0, 80))) {
+        throw new Error("Subtitle response is not WebVTT");
+      }
+      objectURL = this.window.URL.createObjectURL(
+        new this.window.Blob([body], { type: "text/vtt" })
+      );
+      element = this.document.createElement("track");
+      element.kind = "subtitles";
+      element.label = text(descriptor?.label) || "Subtitles";
+      element.srclang = text(descriptor?.language);
+      element.src = objectURL;
+      this.video.appendChild(element);
+      // Hidden tracks are parsed and fire cuechange without Gecko drawing a
+      // second copy behind Mizu's subtitle overlay.
+      this.generatedTracks.set(file, { element, url: objectURL });
+      this.failedTracks.delete(file);
+      if (this.#activeJwSubtitleFile() == file) {
+        this.#activateGeneratedTrack(file);
+      } else {
+        element.track.mode = "disabled";
+      }
+    } catch (_) {
+      element?.remove();
+      if (objectURL) {
+        this.window.URL.revokeObjectURL(objectURL);
+      }
+      this.failedTracks.set(file, Date.now());
+    }
+  }
+
+  async #limitedText(response) {
+    let declared = Number(response.headers.get("content-length")) || 0;
+    if (declared > MAX_SUBTITLE_BYTES) {
+      throw new Error("Subtitle response is too large");
+    }
+    let reader = response.body?.getReader();
+    if (!reader) {
+      let textBody = await response.text();
+      if (textBody.length > MAX_SUBTITLE_BYTES) {
+        throw new Error("Subtitle response is too large");
+      }
+      return textBody;
+    }
+    let decoder = new this.window.TextDecoder();
+    let body = "";
+    let size = 0;
+    while (true) {
+      let { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      size += value.byteLength;
+      if (size > MAX_SUBTITLE_BYTES) {
+        await reader.cancel();
+        throw new Error("Subtitle response is too large");
+      }
+      body += decoder.decode(value, { stream: true });
+    }
+    return body + decoder.decode();
+  }
+
+  #activateGeneratedTrack(file) {
+    for (let [candidate, { element }] of this.generatedTracks) {
+      element.track.mode = candidate == file ? "hidden" : "disabled";
+    }
+  }
+
+  #activeJwSubtitleFile() {
+    let player = this.#jw();
+    let current = Number(this.#call(player, "getCurrentCaptions")) || 0;
+    if (current < 1) {
+      return "";
+    }
+    let config = this.#call(player, "getConfig");
+    try {
+      return subtitleFile(config?.tracks?.[current - 1]?.file);
+    } catch (_) {
+      return "";
+    }
+  }
+
   #selectYouTubeCaption(index) {
     let player = this.#youtube();
     let list = this.#call(player, "getOption", "captions", "tracklist");
@@ -588,6 +743,13 @@ function text(value) {
   }
   return String(value).replace(/\s+/g, " ").trim().slice(0, 60);
 }
+
+function subtitleFile(value) {
+  return typeof value == "string" ? value.trim().slice(0, 4096) : "";
+}
+
+const MAX_SUBTITLE_BYTES = 2 * 1024 * 1024;
+const SUBTITLE_RETRY_MS = 30_000;
 
 function heightFromLabel(label) {
   let match = /(\d{3,4})p?\b/.exec(label || "");

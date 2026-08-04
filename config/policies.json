@@ -1,0 +1,11 @@
+{
+  "policies": {
+    "PasswordManagerEnabled": false,
+    "Preferences": {
+      "browser.translations.automaticallyPopup": {
+        "Value": false,
+        "Status": "locked"
+      }
+    }
+  }
+}

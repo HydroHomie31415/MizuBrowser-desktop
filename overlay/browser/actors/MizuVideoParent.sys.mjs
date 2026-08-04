@@ -41,7 +41,9 @@ const SETTINGS = new Map([
  */
 export class MizuVideoParent extends JSWindowActorParent {
   receiveMessage(message) {
-    let browser = this.manager.rootFrameLoader?.ownerElement;
+    let browser =
+      this.browsingContext.top.embedderElement ??
+      this.manager.rootFrameLoader?.ownerElement;
     let win = browser?.ownerGlobal;
 
     switch (message.name) {
@@ -66,7 +68,9 @@ export class MizuVideoParent extends JSWindowActorParent {
   }
 
   didDestroy() {
-    let browser = this.manager.rootFrameLoader?.ownerElement;
+    let browser =
+      this.browsingContext.top.embedderElement ??
+      this.manager.rootFrameLoader?.ownerElement;
     browser?.ownerGlobal?.MizuVideoPlayer?.onActorDestroyed(
       browser,
       this.browsingContext.id

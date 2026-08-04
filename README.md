@@ -190,10 +190,13 @@ opening a duplicate.
 
 ## Video player
 
-Mizu detects HTML video in the selected tab, including videos in site frames.
-When a video is present, the video-player toolbar button becomes active; while
-it is playing, the icon uses the attention colour. Click the button, press
-`Alt+Shift+V`, or right-click a video and choose **Open in Mizu Video Player**.
+Mizu detects HTML video in the selected tab, including videos in site frames,
+and opens a playing video in Mizu Video Player automatically. Automatic opening
+is disabled on YouTube, Netflix and Prime Video/Amazon video pages so those
+services retain their own players. When a video is present, the video-player
+toolbar button becomes active; while it is playing, the icon uses the attention
+colour. Click the button, press `Alt+Shift+V`, or right-click a video to toggle
+Mizu Video Player manually, including on an automatically excluded site.
 The player reuses the page's live video element instead of reopening its URL,
 so authenticated streams, site-selected quality, subtitles and DRM playback
 keep working. Closing the player returns the element to its exact old position.
@@ -206,6 +209,7 @@ preferences and used by later player sessions.
 
 | Preference | Default | Purpose |
 | --- | --- | --- |
+| `mizu.video.auto-open` | `true` | Open playing videos automatically, except on excluded services |
 | `mizu.video.seek-backward-seconds` | `10` | Left-arrow/back button seek distance |
 | `mizu.video.seek-forward-seconds` | `10` | Right-arrow/forward button seek distance |
 | `mizu.video.volume-step-percent` | `5` | Up/down-arrow volume increment |
@@ -280,29 +284,34 @@ visible at all.
 
 Not every player leaves anything to read. Some parse the subtitle file
 themselves and draw into a div beside the video's container, so when the text
-track carries no cues the player adopts that element instead, slotting it over
-the video and leaving its own offsets alone -- a caption layer positions itself,
-and overriding that stacks every line at the top of the frame. The subtitle menu
-says which of the two is in use, or that nothing was found at all, so a site
-keeping its subtitles out of reach is visible rather than silent.
+track carries no cues the player mirrors that renderer into its own overlay.
+The live element stays in the site player that owns it while its rendered lines
+and offsets are copied over the video. Canvas-based ASS renderers cannot be
+mirrored, so their canvas wrapper is adopted instead. The subtitle menu says
+which path is in use, or that nothing was found at all, so a site keeping its
+subtitles out of reach is visible rather than silent.
 
 Taking the video over also leaves nothing selected, because the site's UI was
 what had the track switched on. `mizu.video.subtitles-auto` turns one back on,
 preferring `mizu.video.subtitle-language`.
 
-Cues are drawn by the player rather than by the video element. The element now
-belongs to the player, and the site's caption layer was left behind in the page
-where nothing can see it, so the chosen track is switched to `hidden` -- which
-still fires `cuechange` -- and its cues are rendered into the player's own
-overlay through `getCueAsHTML`. That is what makes the size, colour, background,
-edge, typeface and position settings possible. Players that never create a text
-track at all, because they parse the subtitle file themselves, are handled by
-adopting their caption element into the player instead.
+Cues are drawn by the player rather than by the video element. When a native
+text track exists, the chosen track is switched to `hidden` -- which still fires
+`cuechange` -- and its cues are rendered into the player's own overlay through
+`getCueAsHTML`. That is what makes the size, colour, background, edge, typeface
+and position settings possible. Players that never create a text track at all
+are handled through the mirrored DOM or adopted canvas path described above.
+JW Player is a special case: its caption renderer freezes when its video leaves
+the JW container even if the caption element stays there. Mizu therefore fetches
+JW's selected WebVTT file with a size limit, exposes it to Gecko through a
+short-lived blob-backed `<track>`, and uses Gecko's cue timing instead.
 
 Selecting a track asks the site's player first, since only it can fetch a
 rendition that has not loaded yet, and then maps the same choice onto the text
 tracks by language, or by position when both lists describe the same set. The
-site's answer is never assumed to arrive.
+site's answer is never assumed to arrive. DOM renderers remain connected to the
+site and are mirrored with a mutation observer. Blob-backed JW tracks are
+removed and their URLs revoked as soon as Mizu closes.
 
 Preferred quality is a ceiling rather than a demand: the closest rendition at or
 below it is selected once per source, so playback does not spend its first
@@ -361,11 +370,12 @@ the window with no draggable region.
 
 ## Bundled extensions
 
-Mizu ships uBlock Origin. It is pinned in `config/extensions.env` by version and
-SHA-256, the same way `config/upstream.env` pins Firefox, and downloaded during
-`./mizu build` rather than committed — so this repository stays source-only and
-the build stays reproducible. `./mizu extensions` installs it on its own if you
-only want to refresh the add-ons.
+Mizu ships uBlock Origin and Bitwarden Password Manager. They are pinned in
+`config/extensions.env` by version and SHA-256, the same way
+`config/upstream.env` pins Firefox, and downloaded during `./mizu build` rather
+than committed — so this repository stays source-only and the build stays
+reproducible. `./mizu extensions` installs them on its own if you only want to
+refresh the add-ons and browser policies.
 
 The pinned file is the **Mozilla-signed** build published by the extension's
 author. That matters: it installs with `xpinstall.signatures.required` left at
@@ -374,12 +384,16 @@ enforcement. Repackaging or modifying the XPI would break the signature — and
 redistributing a modified add-on under its original name is a trademark problem
 on top of a technical one.
 
-The XPI is copied to `distribution/extensions/<add-on id>.xpi` in the build.
-Firefox installs add-ons found there into each new profile at first run, so
-uBlock Origin arrives **enabled** but stays an ordinary add-on: it appears in
-`about:addons`, updates itself from addons.mozilla.org, and can be disabled or
-removed. Once removed, Firefox records that in
+Each XPI is copied to `distribution/extensions/<add-on id>.xpi` in the build.
+Firefox installs add-ons found there into each new profile at first run, so the
+bundled extensions arrive **enabled** but stay ordinary add-ons: they appear in
+`about:addons`, update themselves from addons.mozilla.org, and can be disabled
+or removed. Once removed, Firefox records that in
 `extensions.installedDistroAddon.<id>` and will not reinstall it.
+
+`config/policies.json` disables Firefox's built-in password manager so it does
+not compete with Bitwarden, and suppresses the automatic translation panel.
+Translation itself remains available from the address bar and application menu.
 
 Two consequences worth knowing:
 
@@ -396,11 +410,12 @@ To update a pinned extension, change its version, run
 `./mizu extensions --update-checksum` to print the new digest, paste it into
 `config/extensions.env`, and commit both.
 
-uBlock Origin is licensed GPL-3.0-or-later, which is compatible with
-redistributing it alongside an MPL-2.0 browser as a separate, unmodified
-program. Distributing Mizu with it bundled carries the GPL's obligations for
-that add-on: ship its license text and make its corresponding source available.
-Add both to the distribution checklist below before any public release.
+uBlock Origin is licensed GPL-3.0-or-later and Bitwarden is licensed
+GPL-3.0-only. Both can be redistributed alongside an MPL-2.0 browser as
+separate, unmodified programs. Distributing Mizu with them bundled carries the
+GPL's obligations for those add-ons: ship their license texts and make their
+corresponding source available. Add both to the distribution checklist below
+before any public release.
 
 ## Repository layout
 

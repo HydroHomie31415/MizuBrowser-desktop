@@ -8,6 +8,7 @@ var MizuVideoPlayer = {
 
   _initialized: false,
   _states: new WeakMap(),
+  _autoOpened: new WeakSet(),
 
   init() {
     if (this._initialized) {
@@ -59,6 +60,10 @@ var MizuVideoPlayer = {
         break;
       case "TabSelect":
         this._updateButton();
+        this._maybeAutoOpen(
+          gBrowser.selectedBrowser,
+          this._states.get(gBrowser.selectedBrowser) ?? new Map()
+        );
         break;
       case "keydown":
         if (
@@ -77,6 +82,7 @@ var MizuVideoPlayer = {
 
   onLocationChange(browser) {
     this._states.delete(browser);
+    this._autoOpened.delete(browser);
     if (browser == gBrowser.selectedBrowser) {
       this._updateButton();
     }
@@ -95,6 +101,7 @@ var MizuVideoPlayer = {
     if (browser == gBrowser.selectedBrowser) {
       this._updateButton();
     }
+    this._maybeAutoOpen(browser, states);
   },
 
   onActorDestroyed(browser, contextId) {
@@ -104,7 +111,7 @@ var MizuVideoPlayer = {
     }
   },
 
-  async open(target = null) {
+  async open(target = null, { quiet = false } = {}) {
     let settings = this._settings();
     let candidates = [];
 
@@ -127,18 +134,21 @@ var MizuVideoPlayer = {
       }
       candidates.sort(
         (a, b) =>
+          Number(b.status.playerOpen) - Number(a.status.playerOpen) ||
           Number(b.status.playing) - Number(a.status.playing) ||
           b.status.area - a.status.area
       );
     }
 
     if (!candidates.length) {
-      Services.prompt.alert(
-        window,
-        "Mizu Video Player",
-        "No video was found in this tab. Start a video and try again."
-      );
-      return;
+      if (!quiet) {
+        Services.prompt.alert(
+          window,
+          "Mizu Video Player",
+          "No video was found in this tab. Start a video and try again."
+        );
+      }
+      return false;
     }
 
     try {
@@ -146,14 +156,69 @@ var MizuVideoPlayer = {
         settings,
         targetIdentifier: candidates[0].targetIdentifier ?? null,
       });
+      return true;
     } catch (error) {
       console.error("Could not open Mizu Video Player", error);
-      Services.prompt.alert(
-        window,
-        "Mizu Video Player",
-        "The video changed while the player was opening. Please try again."
-      );
+      if (!quiet) {
+        Services.prompt.alert(
+          window,
+          "Mizu Video Player",
+          "The video changed while the player was opening. Please try again."
+        );
+      }
+      return false;
     }
+  },
+
+  _maybeAutoOpen(browser, states) {
+    if (browser != gBrowser.selectedBrowser) {
+      return;
+    }
+    let values = [...states.values()];
+    if (values.some(state => state.playerOpen)) {
+      this._autoOpened.add(browser);
+      return;
+    }
+    if (!values.some(state => state.playing)) {
+      this._autoOpened.delete(browser);
+      return;
+    }
+    if (
+      this._autoOpened.has(browser) ||
+      !Services.prefs.getBoolPref(`${this.PREF_BRANCH}auto-open`, true) ||
+      this._autoOpenExcluded(browser)
+    ) {
+      return;
+    }
+    this._autoOpened.add(browser);
+    this.open(null, { quiet: true }).then(opened => {
+      if (!opened) {
+        this._autoOpened.delete(browser);
+      }
+    });
+  },
+
+  _autoOpenExcluded(browser) {
+    let url;
+    try {
+      url = new URL(browser.currentURI.spec);
+    } catch (_) {
+      return true;
+    }
+    let host = url.hostname.toLowerCase();
+    if (
+      /(^|\.)youtube(?:-nocookie)?\.com$/.test(host) ||
+      /(^|\.)netflix\.com$/.test(host) ||
+      /(^|\.)primevideo\.com$/.test(host)
+    ) {
+      return true;
+    }
+    if (!/(^|\.)amazon\.[a-z.]+$/.test(host)) {
+      return false;
+    }
+    return /^\/(?:gp\/video|prime-video|amazon-video|video)\b/i.test(
+      url.pathname
+    );
   },
 
   _contexts(root) {
@@ -218,10 +283,15 @@ var MizuVideoPlayer = {
     let states = this._states.get(gBrowser.selectedBrowser);
     let hasVideo = [...(states?.values() ?? [])].some(state => state.hasVideo);
     let playing = [...(states?.values() ?? [])].some(state => state.playing);
+    let playerOpen = [...(states?.values() ?? [])].some(
+      state => state.playerOpen
+    );
     button.toggleAttribute("mizu-video-available", hasVideo);
     button.toggleAttribute("mizu-video-playing", playing);
     let tooltip = "No video detected in this tab";
-    if (playing) {
+    if (playerOpen) {
+      tooltip = "Close Mizu Video Player";
+    } else if (playing) {
       tooltip = "Open the playing video in Mizu Video Player";
     } else if (hasVideo) {
       tooltip = "Open this tab's video in Mizu Video Player";
@@ -253,6 +323,11 @@ var MizuVideoPlayer = {
     });
   },
 };
+
+// The parent JSWindowActor reaches the controller through the owning chrome
+// window. Make that bridge explicit rather than relying on loadSubScript's
+// treatment of top-level `var` declarations.
+window.MizuVideoPlayer = MizuVideoPlayer;
 
 // DOMContentLoaded is too early: gBrowser does not exist yet, so init() threw
 // and the toolbar button, context menu item and shortcut were never installed.

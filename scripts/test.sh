@@ -37,6 +37,7 @@ required_files=(
   .github/workflows/release-linux.yml
   config/upstream.env
   config/extensions.env
+  config/policies.json
   scripts/extensions.sh
   scripts/vendor-anime4k.sh
   config/mozconfig.artifact
@@ -58,10 +59,15 @@ required_files=(
   overlay/browser/branding/mizu/pref/firefox-branding.js
   overlay/browser/base/content/browser-mizu-autohide.js
   overlay/browser/base/content/browser-mizu-command-palette.js
+  overlay/browser/base/content/browser-mizu-hints.js
   overlay/browser/base/content/browser-mizu-video.js
   overlay/browser/actors/Anime4KLibrary.sys.mjs
   overlay/browser/actors/Anime4KProgram.sys.mjs
   overlay/browser/actors/Anime4KRenderer.sys.mjs
+  overlay/browser/actors/MizuHintsChild.sys.mjs
+  overlay/browser/actors/MizuHintsParent.sys.mjs
+  overlay/browser/actors/test/browser/browser_mizu_hints.js
+  overlay/browser/actors/test/browser/file_mizu_hints.html
   overlay/browser/actors/MizuMediaBridge.sys.mjs
   overlay/browser/actors/MizuVideoChild.sys.mjs
   overlay/browser/actors/MizuVideoParent.sys.mjs
@@ -73,6 +79,7 @@ required_files=(
   patches/0002-add-mizu-autohide-chrome.patch
   patches/0003-add-mizu-video-player.patch
   patches/0004-add-mizu-command-palette.patch
+  patches/0006-add-mizu-link-hints.patch
   packaging/arch/mizu.desktop
   packaging/arch/mizu.svg
   packaging/arch/package.sh
@@ -94,6 +101,26 @@ for palette_pref in enabled max-results open-on-new-tab; do
     die "missing command palette default: $palette_pref"
 done
 
+# Link hints label every frame in a tab at once, so the actor pair, the chrome
+# session that hands out the labels, and the defaults all have to stay wired up.
+for hints_path in MizuHintsChild.sys.mjs MizuHintsParent.sys.mjs \
+  browser-mizu-hints.js browser_mizu_hints.js; do
+  grep -q "$hints_path" "$PROJECT_ROOT/patches/0006-add-mizu-link-hints.patch" ||
+    die "link hints are not packaged: $hints_path"
+done
+for hints_pref in enabled characters key-code detect-listeners; do
+  grep -q "pref(\"mizu.hints.$hints_pref\"" \
+    "$PROJECT_ROOT/overlay/browser/branding/mizu/pref/firefox-branding.js" ||
+    die "missing link hints default: $hints_pref"
+done
+# Labels are handed out in the chrome process precisely so that two frames can
+# never offer the same one; generating them in the child would reintroduce that.
+grep -q '_labels(' "$PROJECT_ROOT/overlay/browser/base/content/browser-mizu-hints.js" ||
+  die "link hint labels are not assigned in the chrome process"
+grep -q 'openOrClosedShadowRoot' \
+  "$PROJECT_ROOT/overlay/browser/actors/MizuHintsChild.sys.mjs" ||
+  die "link hints do not descend into shadow roots"
+
 # The video player spans chrome and content processes, so verify that the actor,
 # controller, stylesheet and defaults all remain connected to the build.
 for video_path in Anime4KLibrary.sys.mjs Anime4KProgram.sys.mjs \
@@ -103,7 +130,7 @@ for video_path in Anime4KLibrary.sys.mjs Anime4KProgram.sys.mjs \
   grep -q "$video_path" "$PROJECT_ROOT/patches/0003-add-mizu-video-player.patch" ||
     die "video player is not packaged: $video_path"
 done
-for video_pref in seek-backward-seconds seek-forward-seconds arrow-keys \
+for video_pref in auto-open seek-backward-seconds seek-forward-seconds arrow-keys \
   capture-keys preferred-quality subtitles-auto subtitle-language \
   subtitle-scale-percent subtitle-colour \
   subtitle-background subtitle-edge subtitle-font subtitle-position-percent \
@@ -198,6 +225,8 @@ done
 # Bundled extensions are pinned by checksum, and are fetched rather than
 # committed, so a malformed pin would only surface during a build.
 [[ -n ${MIZU_EXTENSIONS:-} ]] || die "MIZU_EXTENSIONS is empty"
+[[ " $MIZU_EXTENSIONS " == *" BITWARDEN "* ]] ||
+  die "Bitwarden is not included in MIZU_EXTENSIONS"
 for extension_prefix in $MIZU_EXTENSIONS; do
   for field in ID VERSION SHA256 URL; do
     name="${extension_prefix}_${field}"
@@ -212,6 +241,24 @@ for extension_prefix in $MIZU_EXTENSIONS; do
 done
 grep -Fq 'extensions.sh' "$PROJECT_ROOT/scripts/build.sh" ||
   die "build.sh no longer installs bundled extensions"
+grep -Fq 'config/policies.json' "$PROJECT_ROOT/scripts/extensions.sh" ||
+  die "bundled browser policies are not installed"
+python3 - "$PROJECT_ROOT/config/policies.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as policies_file:
+    policies = json.load(policies_file)["policies"]
+
+if policies.get("PasswordManagerEnabled") is not False:
+    raise SystemExit("Firefox password manager is not disabled by policy")
+
+popup = policies.get("Preferences", {}).get(
+    "browser.translations.automaticallyPopup", {}
+)
+if popup.get("Value") is not False or popup.get("Status") != "locked":
+    raise SystemExit("Firefox translation popup is not disabled by policy")
+PY
 grep -Fq 'arch-package)' "$PROJECT_ROOT/mizu" ||
   die "arch-package command is not routed by ./mizu"
 grep -Fq 'Exec=mizu %u' "$PROJECT_ROOT/packaging/arch/mizu.desktop" ||

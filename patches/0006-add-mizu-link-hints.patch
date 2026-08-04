@@ -1,0 +1,76 @@
+# Register the Mizu link hints actor pair, load its chrome script, and add its
+# regression test to the browser/actors manifest.
+#
+# Ctrl+G labels every clickable element in the tab and typing a label activates
+# it. The actor is unconditional rather than pref-gated here because the child
+# does no work until the chrome process asks it to collect; mizu.hints.enabled
+# gates the shortcut itself. See browser/base/content/browser-mizu-hints.js.
+diff --git a/browser/actors/moz.build b/browser/actors/moz.build
+--- a/browser/actors/moz.build
++++ b/browser/actors/moz.build
+@@ -127,6 +127,8 @@
+     "LightweightThemeChild.sys.mjs",
+     "LinkHandlerChild.sys.mjs",
+     "LinkHandlerParent.sys.mjs",
++    "MizuHintsChild.sys.mjs",
++    "MizuHintsParent.sys.mjs",
+     "MizuMediaBridge.sys.mjs",
+     "MizuVideoChild.sys.mjs",
+     "MizuVideoParent.sys.mjs",
+diff --git a/browser/actors/test/browser/browser.toml b/browser/actors/test/browser/browser.toml
+--- a/browser/actors/test/browser/browser.toml
++++ b/browser/actors/test/browser/browser.toml
+@@ -1,5 +1,8 @@
+ [DEFAULT]
+ 
++["browser_mizu_hints.js"]
++support-files = ["file_mizu_hints.html"]
++
+ ["browser_nested_link_clicks.js"]
+ 
+ ["browser_untrusted_click_event.js"]
+diff --git a/browser/base/jar.mn b/browser/base/jar.mn
+--- a/browser/base/jar.mn
++++ b/browser/base/jar.mn
+@@ -61,6 +61,7 @@
+         content/browser/browser-sitePermissionPanel.js      (content/browser-sitePermissionPanel.js)
+         content/browser/browser-siteProtections.js          (content/browser-siteProtections.js)
+         content/browser/browser-sync.js                     (content/browser-sync.js)
++        content/browser/browser-mizu-hints.js               (content/browser-mizu-hints.js)
+         content/browser/browser-customtitlebar.js           (content/browser-customtitlebar.js)
+         content/browser/browser-toolbarKeyNav.js            (content/browser-toolbarKeyNav.js)
+         content/browser/browser-thumbnails.js               (content/browser-thumbnails.js)
+diff --git a/browser/base/content/browser-main.js b/browser/base/content/browser-main.js
+--- a/browser/base/content/browser-main.js
++++ b/browser/base/content/browser-main.js
+@@ -29,6 +29,7 @@
+   Services.scriptloader.loadSubScript("chrome://browser/content/tabbrowser/tabgroup-menu.js", this);
+   Services.scriptloader.loadSubScript("chrome://browser/content/tabbrowser/tabnote-menu.js", this);
+   Services.scriptloader.loadSubScript("chrome://browser/content/tabbrowser/tabs.js", this);
++  Services.scriptloader.loadSubScript("chrome://browser/content/browser-mizu-hints.js", this);
+   Services.scriptloader.loadSubScript("chrome://browser/content/tabbrowser/tabsplitview.js", this);
+   Services.scriptloader.loadSubScript("chrome://browser/content/places/places-menupopup.js", this);
+   Services.scriptloader.loadSubScript("chrome://browser/content/search/autocomplete-popup.js", this);
+diff --git a/browser/components/DesktopActorRegistry.sys.mjs b/browser/components/DesktopActorRegistry.sys.mjs
+--- a/browser/components/DesktopActorRegistry.sys.mjs
++++ b/browser/components/DesktopActorRegistry.sys.mjs
+@@ -366,6 +366,19 @@
+     safeForUntrustedWebProcess: true,
+   },
+ 
++  MizuHints: {
++    parent: {
++      esModuleURI: "resource:///actors/MizuHintsParent.sys.mjs",
++    },
++    child: {
++      esModuleURI: "resource:///actors/MizuHintsChild.sys.mjs",
++    },
++    matches: ["http://*/*", "https://*/*", "file:///*"],
++    allFrames: true,
++    messageManagerGroups: ["browsers"],
++    safeForUntrustedWebProcess: true,
++  },
++
+   MizuVideo: {
+     parent: {
+       esModuleURI: "resource:///actors/MizuVideoParent.sys.mjs",

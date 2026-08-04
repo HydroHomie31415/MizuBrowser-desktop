@@ -11,16 +11,11 @@ diff --git a/browser/actors/moz.build b/browser/actors/moz.build
      "BlockedSiteChild.sys.mjs",
      "BlockedSiteParent.sys.mjs",
      "BrowserProcessChild.sys.mjs",
-@@ -124,6 +127,9 @@ FINAL_TARGET_FILES.actors += [
-     "LightweightThemeChild.sys.mjs",
-     "LinkHandlerChild.sys.mjs",
-     "LinkHandlerParent.sys.mjs",
+@@ -127,1 +130,4 @@ FINAL_TARGET_FILES.actors += [
 +    "MizuMediaBridge.sys.mjs",
 +    "MizuVideoChild.sys.mjs",
 +    "MizuVideoParent.sys.mjs",
      "PageInfoChild.sys.mjs",
-     "PageInfoPreviewChild.sys.mjs",
-     "PageStyleChild.sys.mjs",
 @@ -149,6 +155,30 @@ FINAL_TARGET_FILES.actors += [
      "WebRTCParent.sys.mjs",
  ]
