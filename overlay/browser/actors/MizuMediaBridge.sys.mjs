@@ -308,6 +308,34 @@ export class MizuMediaBridge {
       : this.#called(player, "nextVideo");
   }
 
+  /**
+   * Thumbnail for a point on the seek bar.
+   *
+   * Native metadata tracks sometimes expose WebVTT sprite cues directly. For
+   * players that keep their thumbnail VTT private, drive their existing hover
+   * renderer and flatten the resulting sprite style into plain values.
+   */
+  seekPreview(time, fraction) {
+    let native = this.#nativeSeekPreview(time);
+    if (native) {
+      return native;
+    }
+    for (let [progressSelector, previewSelector] of [
+      [".art-control-progress-inner", ".art-control-vtt-thumbnail"],
+      [".ytp-progress-bar-container", ".ytp-tooltip-bg"],
+    ]) {
+      let preview = this.#playerSeekPreview(
+        progressSelector,
+        previewSelector,
+        fraction
+      );
+      if (preview) {
+        return preview;
+      }
+    }
+    return null;
+  }
+
   // -- page objects ---------------------------------------------------------
 
   #youtube() {
@@ -517,6 +545,112 @@ export class MizuMediaBridge {
       });
     }
     return out.sort((a, b) => b.height - a.height);
+  }
+
+  #nativeSeekPreview(time) {
+    let tracks = this.video.textTracks;
+    for (let index = 0; index < tracks.length; index++) {
+      let track = tracks[index];
+      if (track.kind != "metadata" || !track.cues?.length) {
+        continue;
+      }
+      for (let cueIndex = 0; cueIndex < track.cues.length; cueIndex++) {
+        let cue = track.cues[cueIndex];
+        if (time < cue.startTime || time >= cue.endTime) {
+          continue;
+        }
+        let match = /^(.+?)#xywh=(\d+),(\d+),(\d+),(\d+)\s*$/.exec(
+          String(cue.text ?? "")
+        );
+        if (!match) {
+          continue;
+        }
+        let element = [...this.video.querySelectorAll("track")].find(
+          candidate => candidate.track == track
+        );
+        try {
+          let url = new this.window.URL(
+            match[1],
+            element?.src || this.document.baseURI
+          );
+          if (!/^https?:$/.test(url.protocol) && url.protocol != "blob:") {
+            continue;
+          }
+          return {
+            url: url.href,
+            x: Number(match[2]),
+            y: Number(match[3]),
+            width: Number(match[4]),
+            height: Number(match[5]),
+            size: "auto",
+          };
+        } catch (_) {}
+      }
+    }
+    return null;
+  }
+
+  #playerSeekPreview(progressSelector, previewSelector, fraction) {
+    try {
+      let progress = this.document.querySelector(progressSelector);
+      let preview = this.document.querySelector(previewSelector);
+      if (!progress || !preview) {
+        return null;
+      }
+      let rect = progress.getBoundingClientRect();
+      if (!rect.width) {
+        return null;
+      }
+      progress.dispatchEvent(
+        new this.window.MouseEvent("mousemove", {
+          bubbles: true,
+          clientX: rect.left + Math.max(0, Math.min(1, fraction)) * rect.width,
+          clientY: rect.top + rect.height / 2,
+        })
+      );
+      let style = this.window.getComputedStyle(preview);
+      let image = /^url\((?:"([^"]+)"|'([^']+)'|([^)]*))\)$/.exec(
+        style.backgroundImage
+      );
+      let url = (image?.[1] || image?.[2] || image?.[3] || "").trim();
+      let width = Math.round(parseFloat(style.width));
+      let height = Math.round(parseFloat(style.height));
+      let x = -parseFloat(style.backgroundPositionX);
+      let y = -parseFloat(style.backgroundPositionY);
+      if (
+        !url ||
+        url.length > 4096 ||
+        !Number.isFinite(width) ||
+        !Number.isFinite(height) ||
+        width < 32 ||
+        height < 18 ||
+        width > 640 ||
+        height > 360
+      ) {
+        return null;
+      }
+      let resolved = new this.window.URL(url, this.document.baseURI);
+      if (
+        !/^https?:$/.test(resolved.protocol) &&
+        resolved.protocol != "blob:"
+      ) {
+        return null;
+      }
+      return {
+        url: resolved.href,
+        x: Number.isFinite(x) ? x : 0,
+        y: Number.isFinite(y) ? y : 0,
+        width,
+        height,
+        size: /^(-?\d+(?:\.\d+)?px|auto)(\s+(-?\d+(?:\.\d+)?px|auto))?$/.test(
+          style.backgroundSize
+        )
+          ? style.backgroundSize
+          : "auto",
+      };
+    } catch (_) {
+      return null;
+    }
   }
 
   // -- writers --------------------------------------------------------------

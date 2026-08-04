@@ -79,6 +79,9 @@ required_files=(
   overlay/browser/actors/MizuMediaBridge.sys.mjs
   overlay/browser/actors/MizuVideoChild.sys.mjs
   overlay/browser/actors/MizuVideoParent.sys.mjs
+  overlay/browser/modules/MizuContinueWatching.sys.mjs
+  overlay/browser/extensions/newtab/content-src/components/MizuContinueWatching/MizuContinueWatching.jsx
+  overlay/browser/extensions/newtab/content-src/components/MizuContinueWatching/_MizuContinueWatching.scss
   overlay/browser/themes/shared/browser-mizu-autohide.css
   overlay/browser/themes/shared/browser-mizu-command-palette.css
   overlay/browser/themes/shared/browser-mizu-gestures.css
@@ -91,6 +94,7 @@ required_files=(
   patches/0006-add-mizu-link-hints.patch
   patches/0007-add-mizu-mouse-gestures.patch
   patches/0008-add-mizu-gesture-settings.patch
+  patches/0009-add-mizu-continue-watching.patch
   packaging/arch/mizu.desktop
   packaging/arch/mizu.svg
   packaging/arch/package.sh
@@ -229,6 +233,32 @@ grep -q 'mizu-remove-youtube-shorts' \
 grep -q '_onYouTubeMiniPlayerKeyDown' \
   "$PROJECT_ROOT/overlay/browser/actors/MizuVideoChild.sys.mjs" ||
   die "YouTube miniplayer seeking is not installed"
+grep -q '::slotted(video) { z-index:0!important' \
+  "$PROJECT_ROOT/overlay/browser/actors/MizuVideoChild.sys.mjs" ||
+  die "page-owned video stacking can cover Mizu controls and subtitles"
+grep -Fq 'header.controls-visible,footer.controls-visible' \
+  "$PROJECT_ROOT/overlay/browser/actors/MizuVideoChild.sys.mjs" ||
+  die "video controls do not have an explicit visible state"
+grep -q 'seekPreview(time, fraction)' \
+  "$PROJECT_ROOT/overlay/browser/actors/MizuMediaBridge.sys.mjs" ||
+  die "video seek previews are not connected to page thumbnail metadata"
+grep -q 'class="seek-preview"' \
+  "$PROJECT_ROOT/overlay/browser/actors/MizuVideoChild.sys.mjs" ||
+  die "video seek preview UI is missing"
+grep -q 'MizuContinueWatching.sys.mjs' \
+  "$PROJECT_ROOT/patches/0008-add-mizu-gesture-settings.patch" ||
+  die "continue-watching storage module is not packaged"
+grep -q "components/MizuContinueWatching/MizuContinueWatching" \
+  "$PROJECT_ROOT/patches/0009-add-mizu-continue-watching.patch" ||
+  die "continue-watching styles are not imported"
+grep -q 'MizuVideo:Progress' \
+  "$PROJECT_ROOT/overlay/browser/actors/MizuVideoChild.sys.mjs" ||
+  die "video progress is not sent to continue watching"
+for continue_watching_pref in enabled max-items; do
+  grep -q "pref(\"mizu.continue-watching.$continue_watching_pref\"" \
+    "$PROJECT_ROOT/overlay/browser/branding/mizu/pref/firefox-branding.js" ||
+    die "missing continue-watching default: $continue_watching_pref"
+done
 grep -q 'media.videocontrols.picture-in-picture.keyboard-controls.enabled' \
   "$PROJECT_ROOT/overlay/browser/branding/mizu/pref/firefox-branding.js" ||
   die "Picture-in-Picture keyboard seeking is not enabled"
@@ -302,6 +332,10 @@ done
 [[ -n ${MIZU_EXTENSIONS:-} ]] || die "MIZU_EXTENSIONS is empty"
 [[ " $MIZU_EXTENSIONS " == *" BITWARDEN "* ]] ||
   die "Bitwarden is not included in MIZU_EXTENSIONS"
+for youtube_extension in SPONSORBLOCK DEARROW YOUTUBE_ANTI_TRANSLATE; do
+  [[ " $MIZU_EXTENSIONS " == *" $youtube_extension "* ]] ||
+    die "$youtube_extension is not included in MIZU_EXTENSIONS"
+done
 for extension_prefix in $MIZU_EXTENSIONS; do
   for field in ID VERSION SHA256 URL; do
     name="${extension_prefix}_${field}"

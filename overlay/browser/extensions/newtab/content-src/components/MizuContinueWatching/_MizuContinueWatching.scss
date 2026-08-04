@@ -1,0 +1,100 @@
+.mizu-continue-watching {
+  margin-block: var(--space-large) var(--space-xlarge);
+  min-width: 0;
+
+  h2 {
+    color: var(--text-color);
+    font-size: var(--font-size-large);
+    margin: 0 0 var(--space-medium);
+  }
+}
+
+.mizu-continue-watching-list {
+  display: grid;
+  gap: var(--space-large);
+  grid-auto-columns: minmax(210px, 1fr);
+  grid-auto-flow: column;
+  overflow-x: auto;
+  padding: var(--space-xxsmall) var(--space-xxsmall) var(--space-small);
+  scrollbar-width: thin;
+}
+
+.mizu-continue-watching-card {
+  color: var(--text-color);
+  min-width: 0;
+  text-decoration: none;
+
+  &:focus-visible .mizu-continue-watching-thumbnail {
+    outline: var(--border-width) solid var(--border-color-selected);
+    outline-offset: var(--space-xxsmall);
+  }
+
+  &:hover .mizu-continue-watching-thumbnail {
+    box-shadow: var(--card-box-shadow-hover);
+    transform: translateY(-2px);
+  }
+}
+
+.mizu-continue-watching-thumbnail {
+  aspect-ratio: 16 / 9;
+  background: var(--background-color-box);
+  border-radius: var(--border-radius-medium);
+  display: grid;
+  overflow: hidden;
+  position: relative;
+  transition: box-shadow 120ms ease, transform 120ms ease;
+
+  img,
+  .mizu-continue-watching-placeholder {
+    height: 100%;
+    inset: 0;
+    object-fit: cover;
+    position: absolute;
+    width: 100%;
+  }
+}
+
+.mizu-continue-watching-placeholder {
+  align-items: center;
+  color: var(--text-color-deemphasized);
+  display: flex;
+  font-size: var(--font-size-heading-xlarge);
+  justify-content: center;
+}
+
+.mizu-continue-watching-time {
+  align-self: end;
+  background: var(--background-color-overlay);
+  border-radius: var(--border-radius-small);
+  color: var(--color-white); // stylelint-disable-line stylelint-plugin-mozilla/use-design-tokens -- text sits on a dark media overlay in both themes
+  font-size: var(--font-size-small);
+  justify-self: end;
+  margin: var(--space-small);
+  padding: var(--space-xxsmall) var(--space-small);
+  position: relative;
+}
+
+.mizu-continue-watching-progress {
+  background: var(--background-color-overlay);
+  height: 4px; // stylelint-disable-line stylelint-plugin-mozilla/use-design-tokens -- media progress indicator, not a navigation control
+  inset-block-end: 0;
+  inset-inline: 0;
+  position: absolute;
+
+  span {
+    background: var(--newtab-primary-action-background);
+    display: block;
+    height: 100%;
+  }
+}
+
+.mizu-continue-watching-name {
+  display: -webkit-box;
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.35;
+  margin-block-start: var(--space-small);
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}

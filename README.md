@@ -337,6 +337,15 @@ watch page, preserving the video id and URL parameters, so the video has a
 timeline and can be opened in Mizu Video Player. Set
 `mizu.youtube.remove-shorts` to `false` to restore Shorts.
 
+Mizu also ships SponsorBlock, DeArrow and YouTube Anti Translate as pinned,
+Mozilla-hosted add-ons. SponsorBlock skips community-reported sponsors, intros,
+outros and other configured segment categories. DeArrow replaces sensational
+titles and thumbnails with community-written alternatives. YouTube Anti
+Translate restores original titles, descriptions, chapters, thumbnails and
+audio tracks instead of YouTube's automatically translated or dubbed versions.
+All three remain ordinary add-ons and can be configured or disabled from
+`about:addons`.
+
 When YouTube's in-page miniplayer is active, bare `Left` and `Right` arrows seek
 backward and forward using Mizu's configured seek intervals. The same shortcuts
 remain enabled in Firefox's floating Picture-in-Picture player. Text fields and
@@ -360,6 +369,20 @@ also available inside Mizu's player:
 | `C` | Toggle captions |
 | `I` | Toggle Picture-in-Picture |
 | `F` | Toggle fullscreen |
+
+## Continue watching
+
+After 15 seconds of a video that is at least one minute long, Mizu records its
+page, title, thumbnail, duration and current position in the local profile. The
+Mizu start page presents the eight most recent unfinished videos as a
+**Continue watching** shelf with progress bars and elapsed times. YouTube cards
+resume at the saved timestamp; other sites reopen their video page and can use
+their own resume mechanism.
+
+Completed videos disappear when playback reaches the final 5% or last 30
+seconds. Private windows neither read nor write the list. Set
+`mizu.continue-watching.enabled` to `false` to disable collection and the shelf,
+or change `mizu.continue-watching.max-items` to keep between one and 24 cards.
 
 ### Subtitles and quality
 
@@ -461,8 +484,8 @@ the window with no draggable region.
 
 ## Bundled extensions
 
-Mizu ships uBlock Origin and Bitwarden Password Manager. They are pinned in
-`config/extensions.env` by version and SHA-256, the same way
+Mizu ships uBlock Origin, Bitwarden Password Manager, SponsorBlock, DeArrow and
+YouTube Anti Translate. They are pinned in `config/extensions.env` by version and SHA-256, the same way
 `config/upstream.env` pins Firefox, and downloaded during `./mizu build` rather
 than committed — so this repository stays source-only and the build stays
 reproducible. `./mizu extensions` installs them on its own if you only want to
@@ -501,12 +524,11 @@ To update a pinned extension, change its version, run
 `./mizu extensions --update-checksum` to print the new digest, paste it into
 `config/extensions.env`, and commit both.
 
-uBlock Origin is licensed GPL-3.0-or-later and Bitwarden is licensed
-GPL-3.0-only. Both can be redistributed alongside an MPL-2.0 browser as
-separate, unmodified programs. Distributing Mizu with them bundled carries the
-GPL's obligations for those add-ons: ship their license texts and make their
-corresponding source available. Add both to the distribution checklist below
-before any public release.
+uBlock Origin is licensed GPL-3.0-or-later, Bitwarden is GPL-3.0-only,
+SponsorBlock and DeArrow are LGPL-3.0-only, and YouTube Anti Translate is MIT.
+They can be redistributed alongside an MPL-2.0 browser as separate, unmodified
+programs. A public Mizu release must ship their license texts and satisfy each
+add-on's corresponding-source obligations.
 
 ## Repository layout
 
@@ -552,7 +574,8 @@ tracked upstream files have local changes.
 2. Configure and sign a Mizu-owned update service; updates start disabled.
 3. Add code signing and notarization for each target platform.
 4. Review Mozilla's trademark policy and MPL-2.0 source obligations.
-5. Ship uBlock Origin's GPL-3.0 license text and offer its corresponding source.
+5. Ship every bundled add-on's license text and provide corresponding source
+   where its license requires it.
 6. Publish the exact source revision, overlay, patches, and build config.
 7. Add automated browser tests and a rapid security-update process.
 

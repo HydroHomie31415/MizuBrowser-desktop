@@ -113,9 +113,21 @@ pref("mizu.gestures.recorded", "");
 // otherwise open under the pointer before a gesture could start.
 pref("ui.context_menus.after_mouseup", true);
 
+// Middle button. Upstream leaves autoscroll off on Linux and gives the button
+// to X11 primary-selection paste instead; Mizu takes the Windows and macOS
+// behaviour on every platform, so the button scrolls. The paste has to go with
+// it: while middlemouse.paste is on it consumes the press and autoscroll never
+// starts.
+pref("general.autoScroll", true);
+pref("middlemouse.paste", false);
+
 // YouTube. Remove Shorts shelves and links, and open direct Shorts URLs in the
 // standard watch page so they get the full Mizu player experience.
 pref("mizu.youtube.remove-shorts", true);
+// Activity Stream shows locally recorded, non-private video progress. The
+// entry payload itself is stored in a user pref only after playback begins.
+pref("mizu.continue-watching.enabled", true);
+pref("mizu.continue-watching.max-items", 8);
 // Keep the same bare-arrow seeking available in Firefox's floating PiP player.
 pref("media.videocontrols.picture-in-picture.keyboard-controls.enabled", true);
 

@@ -96,10 +96,11 @@ diff --git a/browser/locales/jar.mn b/browser/locales/jar.mn
 diff --git a/browser/modules/moz.build b/browser/modules/moz.build
 --- a/browser/modules/moz.build
 +++ b/browser/modules/moz.build
-@@ -129,6 +129,7 @@ EXTRA_JS_MODULES += [
+@@ -129,6 +129,8 @@ EXTRA_JS_MODULES += [
      "LaterRun.sys.mjs",
      "LinksCache.sys.mjs",
      "MenuSectionLayout.sys.mjs",
++    "MizuContinueWatching.sys.mjs",
 +    "MizuGestureActions.sys.mjs",
      "PageActions.sys.mjs",
      "PartnerLinkAttribution.sys.mjs",

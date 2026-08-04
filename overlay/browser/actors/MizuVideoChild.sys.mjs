@@ -34,6 +34,7 @@ export class MizuVideoChild extends JSWindowActorChild {
   actorCreated() {
     this._player = null;
     this._stateTimer = null;
+    this._progressTimer = null;
     this._destroyed = false;
     this._observer = new this.contentWindow.MutationObserver(() =>
       this._scheduleState()
@@ -66,6 +67,10 @@ export class MizuVideoChild extends JSWindowActorChild {
       true
     );
     this._observer?.disconnect();
+    if (this._progressTimer) {
+      this.contentWindow?.clearTimeout(this._progressTimer);
+      this._progressTimer = null;
+    }
     this._player?.close();
     this._player = null;
   }
@@ -73,6 +78,17 @@ export class MizuVideoChild extends JSWindowActorChild {
   handleEvent(event) {
     if (event.type == "pageshow" || event.type == "DOMContentLoaded") {
       this._observeDocument();
+    }
+    if (event.type == "timeupdate") {
+      this._scheduleProgress();
+    } else if (
+      event.type == "play" ||
+      event.type == "playing" ||
+      event.type == "pause" ||
+      event.type == "ended" ||
+      event.type == "loadedmetadata"
+    ) {
+      this._scheduleProgress(true);
     }
     this._scheduleState();
   }
@@ -252,6 +268,56 @@ export class MizuVideoChild extends JSWindowActorChild {
     }, 100);
   }
 
+  /**
+   * Samples playback slowly enough to keep the profile pref and parent-process
+   * message traffic quiet while still leaving a useful resume position if the
+   * tab or browser closes unexpectedly.
+   */
+  _scheduleProgress(immediate = false) {
+    if (this._destroyed || !this.contentWindow) {
+      return;
+    }
+    if (immediate && this._progressTimer) {
+      this.contentWindow.clearTimeout(this._progressTimer);
+      this._progressTimer = null;
+    } else if (this._progressTimer) {
+      return;
+    }
+    this._progressTimer = this.contentWindow.setTimeout(
+      () => {
+        this._progressTimer = null;
+        if (!this._destroyed) {
+          let progress = this._watchProgress();
+          if (progress) {
+            this.sendAsyncMessage("MizuVideo:Progress", progress);
+          }
+        }
+      },
+      immediate ? 0 : 5000
+    );
+  }
+
+  _watchProgress() {
+    let video = this._bestVideo();
+    if (!video || !Number.isFinite(video.duration) || video.duration <= 0) {
+      return null;
+    }
+    let thumbnail = "";
+    try {
+      thumbnail =
+        video.poster ||
+        this.document.querySelector('meta[property="og:image"]')?.content ||
+        "";
+    } catch (_) {}
+    return {
+      title: this.document.title,
+      thumbnail,
+      position: Number(video.currentTime) || 0,
+      duration: video.duration,
+      ended: video.ended,
+    };
+  }
+
   _open({ settings, targetIdentifier }) {
     if (this._player) {
       this._player.close();
@@ -382,6 +448,7 @@ class Player {
     this.pageCaptionSource = null;
     this.pageCaptionObserver = null;
     this.captionsWarned = false;
+    this.quietAction = false;
     this._boundVideoUpdate = () => this._updateControls();
     this._boundCueUpdate = () => this._renderCues();
   }
@@ -503,7 +570,10 @@ class Player {
           <button data-action="close" aria-label="Close player" title="Close">✕</button>
         </header>
         <footer class="controls controls-visible">
-          <input class="timeline" type="range" min="0" max="100" step="0.05" value="0" aria-label="Video position">
+          <div class="timeline-wrap">
+            <div class="seek-preview" hidden><div class="seek-preview-image"></div><span>0:00</span></div>
+            <input class="timeline" type="range" min="0" max="100" step="0.05" value="0" aria-label="Video position">
+          </div>
           <div class="control-row">
             <button data-action="previous-video" class="youtube-control" aria-label="Previous playlist video" title="Previous video (Shift+P)">⏮</button>
             <button data-action="play" class="play" aria-label="Play or pause">▶</button>
@@ -647,6 +717,12 @@ class Player {
       if (Number.isFinite(this.video.duration)) {
         this.video.currentTime = Number(event.target.value);
       }
+    });
+    this._on(this.root.querySelector(".timeline"), "pointermove", event =>
+      this._previewSeek(event)
+    );
+    this._on(this.root.querySelector(".timeline"), "pointerleave", () => {
+      this.root.querySelector(".seek-preview").hidden = true;
     });
     this._on(this.root.querySelector(".volume"), "input", event => {
       this.video.volume = Number(event.target.value);
@@ -1016,12 +1092,18 @@ class Player {
     if (source.matches?.("input, select, button, textarea")) {
       return;
     }
+    // Seeking from the keyboard stays quiet: the toast already reports the
+    // jump, so raising the whole control bar over the video only gets in the
+    // way of watching. The seek helpers raise this flag for the checks below.
+    this.quietAction = false;
     let handled = this._onCoreKey(event);
     if (handled !== null) {
       if (handled) {
         event.preventDefault();
         event.stopPropagation();
-        this._showControls();
+        if (!this.quietAction) {
+          this._showControls();
+        }
       }
       return;
     }
@@ -1117,7 +1199,9 @@ class Player {
     if (handled) {
       event.preventDefault();
       event.stopPropagation();
-      this._showControls();
+      if (!this.quietAction) {
+        this._showControls();
+      }
     }
   }
 
@@ -1142,6 +1226,7 @@ class Player {
       }
       let fraction = Number(event.code.slice(-1)) / 10;
       this.video.currentTime = this.video.duration * fraction;
+      this.quietAction = true;
       this._toast(`${Math.round(fraction * 100)}%`);
       return true;
     }
@@ -1183,10 +1268,12 @@ class Player {
         return false;
       case "Home":
         this.video.currentTime = 0;
+        this.quietAction = true;
         return true;
       case "End":
         if (Number.isFinite(this.video.duration)) {
           this.video.currentTime = this.video.duration;
+          this.quietAction = true;
           return true;
         }
         return false;
@@ -1213,6 +1300,7 @@ class Player {
       0,
       Math.min(end, this.video.currentTime + delta)
     );
+    this.quietAction = true;
     this._toast(`${delta > 0 ? "+" : "−"}${Math.abs(delta)} seconds`);
   }
 
@@ -1248,6 +1336,7 @@ class Player {
     target = Math.min(this.chapters.length - 1, Math.max(0, target));
     let chapter = this.chapters[target];
     this.video.currentTime = chapter.start;
+    this.quietAction = true;
     this._toast(chapter.title);
   }
 
@@ -1308,13 +1397,62 @@ class Player {
     this.root.querySelector(".chapter").textContent = chapter?.title ?? "";
   }
 
+  _previewSeek(event) {
+    if (!Number.isFinite(this.video.duration) || this.video.duration <= 0) {
+      return;
+    }
+    let timeline = event.currentTarget;
+    let rect = timeline.getBoundingClientRect();
+    if (!rect.width) {
+      return;
+    }
+    let fraction = Math.max(
+      0,
+      Math.min(1, (event.clientX - rect.left) / rect.width)
+    );
+    let time = fraction * this.video.duration;
+    let preview = this.root.querySelector(".seek-preview");
+    let image = preview.querySelector(".seek-preview-image");
+    let width = Math.min(176, Math.max(96, rect.width - 8));
+    preview.style.left = `${Math.max(
+      width / 2,
+      Math.min(rect.width - width / 2, fraction * rect.width)
+    )}px`;
+    preview.querySelector("span").textContent = formatTime(time);
+
+    let thumbnail = this.bridge.seekPreview(time, fraction);
+    image.hidden = !thumbnail;
+    if (thumbnail) {
+      let scale = Math.min(1, width / thumbnail.width);
+      image.style.width = `${thumbnail.width}px`;
+      image.style.height = `${thumbnail.height}px`;
+      image.style.backgroundImage = `url("${thumbnail.url.replaceAll(
+        '"',
+        "%22"
+      )}")`;
+      image.style.backgroundPosition = `-${thumbnail.x}px -${thumbnail.y}px`;
+      image.style.backgroundSize = thumbnail.size;
+      image.style.transform = `scale(${scale})`;
+      image.style.margin = `${
+        -((1 - scale) * thumbnail.height) / 2
+      }px ${-((1 - scale) * thumbnail.width) / 2}px`;
+    }
+    preview.hidden = false;
+  }
+
   _showControls(pinned = false) {
     this.host.setAttribute("controls-visible", "");
+    for (let controls of this.root.querySelectorAll("header,footer")) {
+      controls.classList.add("controls-visible");
+    }
     this.window.clearTimeout(this.hideTimer);
     if (!pinned && !this.video.paused) {
       this.hideTimer = this.window.setTimeout(() => {
         if (!this.root.querySelector(".panel:not([hidden])")) {
           this.host.removeAttribute("controls-visible");
+          for (let controls of this.root.querySelectorAll("header,footer")) {
+            controls.classList.remove("controls-visible");
+          }
         }
       }, this.settings.controlsTimeout);
     }
@@ -2120,14 +2258,18 @@ const PLAYER_STYLES = `
   ::slotted(video),canvas { width:100%!important; height:100%!important; object-fit:contain!important; position:absolute!important; inset:0!important; margin:0!important; padding:0!important; max-width:none!important; max-height:none!important; min-width:0!important; min-height:0!important; transform:none!important; background:#000; }
   /* Overriding the page has to stop short of "display", or the rule would also
      outrank the one below that keeps the idle canvas off the video. */
-  ::slotted(video) { display:block!important; visibility:visible!important; opacity:1!important; }
+  /* Player styles are still allowed to match a slotted video. Artplayer, for
+     example, gives its video z-index:10 while its libass captions sit at 20.
+     Keeping that page-owned stacking level puts the video above Mizu's shadow
+     controls and above the caption layer after both are adopted. Start the
+     video at the bottom of our own stack instead. */
+  ::slotted(video) { z-index:0!important; display:block!important; visibility:visible!important; opacity:1!important; }
   canvas { display:none; }
   :host([anime4k][anime4k-painting]) canvas { display:block; }
-  header,footer { position:absolute; z-index:3; left:0; right:0; display:flex; align-items:center; transition:opacity .18s ease,transform .18s ease; background:linear-gradient(rgba(0,0,0,.78),transparent); padding:18px 22px; }
-  header { top:0; gap:10px; }
-  footer { bottom:0; flex-direction:column; align-items:stretch; gap:10px; padding-top:48px; background:linear-gradient(transparent,rgba(0,0,0,.88)); }
-  :host(:not([controls-visible])) header { opacity:0; transform:translateY(-12px); pointer-events:none; }
-  :host(:not([controls-visible])) footer { opacity:0; transform:translateY(12px); pointer-events:none; }
+  header,footer { position:absolute; z-index:3; left:0; right:0; display:flex; align-items:center; opacity:0; pointer-events:none; transition:opacity .18s ease,transform .18s ease; background:linear-gradient(rgba(0,0,0,.78),transparent); padding:18px 22px; }
+  header { top:0; gap:10px; transform:translateY(-12px); }
+  footer { bottom:0; flex-direction:column; align-items:stretch; gap:10px; padding-top:48px; transform:translateY(12px); background:linear-gradient(transparent,rgba(0,0,0,.88)); }
+  header.controls-visible,footer.controls-visible { opacity:1; transform:none; pointer-events:auto; }
   .brand { font-weight:600; font-size:15px; }
   .quality { color:#b1b1b3; font-size:12px; }
   .chapter { color:#d7d7db; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -2143,7 +2285,13 @@ const PLAYER_STYLES = `
   .time { margin-left:8px; font-variant-numeric:tabular-nums; font-size:12px; }
   .seek { min-width:52px; font-size:12px; }
   input[type=range] { accent-color:#00ddff; }
-  .timeline { width:100%; margin:0; --progress:0%; }
+  .timeline-wrap { position:relative; width:100%; }
+  .timeline { display:block; width:100%; margin:0; --progress:0%; }
+  .seek-preview { position:absolute; z-index:8; bottom:22px; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; padding:4px; border-radius:8px; background:rgba(20,20,24,.96); box-shadow:0 4px 18px rgba(0,0,0,.55); pointer-events:none; overflow:hidden; }
+  .seek-preview[hidden] { display:none; }
+  .seek-preview-image { flex:none; width:160px; height:90px; border-radius:5px; background-repeat:no-repeat; transform-origin:center; }
+  .seek-preview-image[hidden] { display:none; }
+  .seek-preview span { padding:5px 8px 2px; border-radius:999px; font-size:12px; font-variant-numeric:tabular-nums; color:#fbfbfe; }
   .volume { width:90px; }
   .center-play { position:absolute; z-index:2; inset:50% auto auto 50%; transform:translate(-50%,-50%); border-radius:50%; width:68px; height:68px; font-size:28px; padding-left:13px; background:rgba(20,20,24,.78); }
   .center-play[hidden] { display:none; }

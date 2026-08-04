@@ -72,7 +72,7 @@ diff --git a/browser/base/jar.mn b/browser/base/jar.mn
 diff --git a/browser/components/DesktopActorRegistry.sys.mjs b/browser/components/DesktopActorRegistry.sys.mjs
 --- a/browser/components/DesktopActorRegistry.sys.mjs
 +++ b/browser/components/DesktopActorRegistry.sys.mjs
-@@ -366,6 +366,29 @@ let JSWINDOWACTORS = {
+@@ -366,6 +366,30 @@ let JSWINDOWACTORS = {
      safeForUntrustedWebProcess: true,
    },
  
@@ -91,6 +91,7 @@ diff --git a/browser/components/DesktopActorRegistry.sys.mjs b/browser/component
 +        ended: { capture: true },
 +        loadedmetadata: { capture: true },
 +        emptied: { capture: true },
++        timeupdate: { capture: true },
 +      },
 +    },
 +    matches: ["http://*/*", "https://*/*", "file:///*"],

@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+import { MizuContinueWatching } from "resource:///modules/MizuContinueWatching.sys.mjs";
+
 const SETTINGS = new Map([
   ["seek-backward-seconds", { type: "int", min: 1, max: 120 }],
   ["seek-forward-seconds", { type: "int", min: 1, max: 120 }],
@@ -58,6 +60,9 @@ export class MizuVideoParent extends JSWindowActorParent {
           this.browsingContext.id,
           message.data
         );
+        break;
+      case "MizuVideo:Progress":
+        MizuContinueWatching.record(browser, message.data);
         break;
       case "MizuVideo:SetSetting":
         this.#setSetting(message.data);
