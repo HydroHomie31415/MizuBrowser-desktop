@@ -35,6 +35,10 @@ const SETTINGS = new Map([
   ["subtitle-language", { type: "string", values: /^[a-z]{0,8}$/ }],
 ]);
 
+const AUTO_STATES = new WeakMap();
+const AUTO_OPENED = new WeakSet();
+const AUTO_OPENING = new WeakSet();
+
 /**
  * Chrome-process half of the Mizu video player: it owns the preferences and
  * brokers the frame-tree work the content process is not allowed to do itself.
@@ -48,6 +52,7 @@ export class MizuVideoParent extends JSWindowActorParent {
 
     switch (message.name) {
       case "MizuVideo:State":
+        this.#autoOpen(browser, message.data);
         win?.MizuVideoPlayer?.onActorState(
           browser,
           this.browsingContext.id,
@@ -75,6 +80,53 @@ export class MizuVideoParent extends JSWindowActorParent {
       browser,
       this.browsingContext.id
     );
+    let states = AUTO_STATES.get(browser);
+    states?.delete(this.browsingContext.id);
+    if (!states?.size) {
+      AUTO_STATES.delete(browser);
+      AUTO_OPENED.delete(browser);
+      AUTO_OPENING.delete(browser);
+    }
+  }
+
+  #autoOpen(browser, state) {
+    if (!browser) {
+      return;
+    }
+    let states = AUTO_STATES.get(browser);
+    if (!states) {
+      states = new Map();
+      AUTO_STATES.set(browser, states);
+    }
+    states.set(this.browsingContext.id, state);
+    let values = [...states.values()];
+    if (values.some(value => value.playerOpen)) {
+      AUTO_OPENED.add(browser);
+      return;
+    }
+    if (!values.some(value => value.playing)) {
+      AUTO_OPENED.delete(browser);
+      return;
+    }
+    let win = browser.ownerGlobal;
+    if (
+      !state.playing ||
+      browser != win?.gBrowser?.selectedBrowser ||
+      AUTO_OPENED.has(browser) ||
+      AUTO_OPENING.has(browser) ||
+      !Services.prefs.getBoolPref("mizu.video.auto-open", true) ||
+      autoOpenExcluded(browser.currentURI?.spec)
+    ) {
+      return;
+    }
+    AUTO_OPENING.add(browser);
+    AUTO_OPENED.add(browser);
+    this.sendQuery("MizuVideo:Open", {
+      settings: videoSettings(),
+      targetIdentifier: null,
+    })
+      .catch(() => AUTO_OPENED.delete(browser))
+      .finally(() => AUTO_OPENING.delete(browser));
   }
 
   #setSetting({ name, value }) {
@@ -101,6 +153,67 @@ export class MizuVideoParent extends JSWindowActorParent {
       Services.prefs.setStringPref(pref, value);
     }
   }
+}
+
+function videoSettings() {
+  let int = (name, fallback) =>
+    Services.prefs.getIntPref(`mizu.video.${name}`, fallback);
+  let bool = (name, fallback) =>
+    Services.prefs.getBoolPref(`mizu.video.${name}`, fallback);
+  let string = (name, fallback) =>
+    Services.prefs.getStringPref(`mizu.video.${name}`, fallback);
+  return {
+    seekBackward: int("seek-backward-seconds", 10),
+    seekForward: int("seek-forward-seconds", 10),
+    volumeStep: int("volume-step-percent", 5) / 100,
+    controlsTimeout: int("controls-timeout-ms", 2500),
+    arrowKeys: bool("arrow-keys", true),
+    spaceKey: bool("space-key", true),
+    mediaKeys: bool("media-keys", true),
+    captureKeys: bool("capture-keys", true),
+    preferredQuality: int("preferred-quality", 1080),
+    subtitleScale: int("subtitle-scale-percent", 100) / 100,
+    subtitleColour: string("subtitle-colour", "white"),
+    subtitleBackground: string("subtitle-background", "soft"),
+    subtitleEdge: string("subtitle-edge", "outline"),
+    subtitleFont: string("subtitle-font", "sans"),
+    subtitlePosition: int("subtitle-position-percent", 8),
+    subtitlesAuto: bool("subtitles-auto", true),
+    subtitleLanguage: string("subtitle-language", "en"),
+    anime4k: bool("anime4k-enabled", false),
+    anime4kMode: string("anime4k-mode", "a"),
+    anime4kQuality: string("anime4k-quality", "M"),
+    anime4kStrength: int("anime4k-strength-percent", 100) / 100,
+    anime4kMaxSourceHeight: int("anime4k-max-source-height", 1080),
+    anime4kMaxOutputScale: int("anime4k-max-output-scale", 4),
+    anime4kFrameRateLimit: int("anime4k-frame-rate-limit", 0),
+    anime4kAdaptive: bool("anime4k-adaptive", true),
+    anime4kStats: bool("anime4k-stats", false),
+    anime4kExtras: string("anime4k-extras", "")
+      .split(",")
+      .filter(entry => entry.length),
+  };
+}
+
+function autoOpenExcluded(spec) {
+  let url;
+  try {
+    url = new URL(spec);
+  } catch (_) {
+    return true;
+  }
+  let host = url.hostname.toLowerCase();
+  if (
+    /(^|\.)youtube(?:-nocookie)?\.com$/.test(host) ||
+    /(^|\.)netflix\.com$/.test(host) ||
+    /(^|\.)primevideo\.com$/.test(host)
+  ) {
+    return true;
+  }
+  return (
+    /(^|\.)amazon\.[a-z.]+$/.test(host) &&
+    /^\/(?:gp\/video|prime-video|amazon-video|video)\b/i.test(url.pathname)
+  );
 }
 
 /**

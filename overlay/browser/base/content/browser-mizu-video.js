@@ -8,7 +8,6 @@ var MizuVideoPlayer = {
 
   _initialized: false,
   _states: new WeakMap(),
-  _autoOpened: new WeakSet(),
 
   init() {
     if (this._initialized) {
@@ -60,10 +59,6 @@ var MizuVideoPlayer = {
         break;
       case "TabSelect":
         this._updateButton();
-        this._maybeAutoOpen(
-          gBrowser.selectedBrowser,
-          this._states.get(gBrowser.selectedBrowser) ?? new Map()
-        );
         break;
       case "keydown":
         if (
@@ -82,7 +77,6 @@ var MizuVideoPlayer = {
 
   onLocationChange(browser) {
     this._states.delete(browser);
-    this._autoOpened.delete(browser);
     if (browser == gBrowser.selectedBrowser) {
       this._updateButton();
     }
@@ -101,7 +95,6 @@ var MizuVideoPlayer = {
     if (browser == gBrowser.selectedBrowser) {
       this._updateButton();
     }
-    this._maybeAutoOpen(browser, states);
   },
 
   onActorDestroyed(browser, contextId) {
@@ -168,57 +161,6 @@ var MizuVideoPlayer = {
       }
       return false;
     }
-  },
-
-  _maybeAutoOpen(browser, states) {
-    if (browser != gBrowser.selectedBrowser) {
-      return;
-    }
-    let values = [...states.values()];
-    if (values.some(state => state.playerOpen)) {
-      this._autoOpened.add(browser);
-      return;
-    }
-    if (!values.some(state => state.playing)) {
-      this._autoOpened.delete(browser);
-      return;
-    }
-    if (
-      this._autoOpened.has(browser) ||
-      !Services.prefs.getBoolPref(`${this.PREF_BRANCH}auto-open`, true) ||
-      this._autoOpenExcluded(browser)
-    ) {
-      return;
-    }
-    this._autoOpened.add(browser);
-    this.open(null, { quiet: true }).then(opened => {
-      if (!opened) {
-        this._autoOpened.delete(browser);
-      }
-    });
-  },
-
-  _autoOpenExcluded(browser) {
-    let url;
-    try {
-      url = new URL(browser.currentURI.spec);
-    } catch (_) {
-      return true;
-    }
-    let host = url.hostname.toLowerCase();
-    if (
-      /(^|\.)youtube(?:-nocookie)?\.com$/.test(host) ||
-      /(^|\.)netflix\.com$/.test(host) ||
-      /(^|\.)primevideo\.com$/.test(host)
-    ) {
-      return true;
-    }
-    if (!/(^|\.)amazon\.[a-z.]+$/.test(host)) {
-      return false;
-    }
-    return /^\/(?:gp\/video|prime-video|amazon-video|video)\b/i.test(
-      url.pathname
-    );
   },
 
   _contexts(root) {
