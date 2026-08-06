@@ -21,6 +21,7 @@ Commands:
   bootstrap       Fetch source and install Mozilla build prerequisites
   sync            Install branding, product files, and patches
   build           Build the selected configuration
+  install         Install a local package or the latest Arch Linux release
   extensions      Install the bundled extensions into the build
   run             Run Mizu with an isolated development profile
   package         Create a release-style package
@@ -41,6 +42,9 @@ EOF
 case "$command_name" in
   doctor|fetch|bootstrap|sync|build|status|test|extensions|arch-package)
     exec "$PROJECT_ROOT/scripts/$command_name.sh" "$@"
+    ;;
+  install)
+    exec "$PROJECT_ROOT/install.sh" "$@"
     ;;
   upstream-check)
     exec "$PROJECT_ROOT/scripts/upstream-check.sh" "$@"

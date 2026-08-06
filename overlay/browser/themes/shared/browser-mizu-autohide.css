@@ -194,3 +194,36 @@
   opacity: 0;
   pointer-events: none;
 }
+
+/* Upstream insets the content area from the window and frames what is left:
+ * --chrome-window-gap of padding on #browser, then a border, a rounded corner
+ * and a shadow on the container inside it. That inset is there to set the
+ * content apart from the chrome around it. Once the column is out of flow
+ * there is no chrome around it -- the content area is the window -- so the
+ * whole frame lands against the window edge and reads as a border drawn
+ * around the browser.
+ *
+ * Zeroing the gap is what removes the inset: #browser's padding, the toolbox's
+ * margins and the tab box's own gap are all expressed in terms of it. The
+ * border and radius are separate declarations and have to be named.
+ *
+ * Only lifted while the column floats. Docked, this is what separates it from
+ * the content. */
+:root[mizu-chrome-autohide] {
+  --chrome-window-gap: 0px;
+
+  /* Qualified by #tabbrowser-tabpanels only to outrank upstream, which sets
+   * the border and the radius through that id. A selector of classes alone
+   * loses to it however many are stacked up. */
+  & #tabbrowser-tabpanels .browserContainer {
+    border: none;
+    border-radius: 0;
+    outline: none;
+    box-shadow: none;
+  }
+
+  /* The backdrop is radiused to match the corner removed above. */
+  & #tabbrowser-tabbox .dialogOverlay[topmost="true"] {
+    border-radius: 0;
+  }
+}

@@ -13,6 +13,29 @@ pref("startup.homepage_override_url", "");
 pref("startup.homepage_welcome_url", "");
 pref("startup.homepage_welcome_url.additional", "");
 
+// Mizu has no data pipeline behind it and is not enrolled in Mozilla's
+// experiments, so the work below is done for a server that will never read it,
+// on the same reasoning as the update service above. Normandy's own recipe
+// runner is what checks app.normandy.enabled: turning it off unregisters the
+// timer that re-fetches remote recipes every six hours. The subsystems it
+// initialises at startup are not gated on this pref and still run.
+pref("app.normandy.enabled", false);
+pref("app.shield.optoutstudies.enabled", false);
+pref("datareporting.healthreport.uploadEnabled", false);
+pref("datareporting.policy.dataSubmissionEnabled", false);
+// Add-on recommendations, which submits a profile to Mozilla's service to get
+// suggestions back for about:addons.
+pref("browser.discovery.enabled", false);
+
+// New tab. Mizu opens this page far more often than Firefox does, because the
+// command palette opens on it, so it is the one page that has to be instant.
+// Sponsored tiles and stories are fetched over the network to render there,
+// which is a poor trade on that page and an odd one in a browser that ships
+// uBlock Origin, SponsorBlock and DeArrow. Activity Stream installs its own
+// defaults only for prefs that do not already have one, so these hold.
+pref("browser.newtabpage.activity-stream.showSponsored", false);
+pref("browser.newtabpage.activity-stream.showSponsoredTopSites", false);
+
 // Mizu's default layout: tabs live in the sidebar, and the navigation toolbar
 // and sidebar both auto-hide so the content area keeps the whole window.
 pref("sidebar.revamp", true);
@@ -41,6 +64,15 @@ pref("mizu.chrome.hide-delay-ms", 120);
 pref("mizu.palette.enabled", true);
 pref("mizu.palette.max-results", 14);
 pref("mizu.palette.open-on-new-tab", true);
+
+// Same-network tab sync. It stays off until explicitly enabled from the command
+// palette because enabling it opens a LAN listener. A long random pairing token
+// is generated on first use and stored in the profile; private windows and
+// non-HTTP(S) pages are never published.
+pref("mizu.tabsync.enabled", false);
+pref("mizu.tabsync.port", 8765);
+pref("mizu.tabsync.token", "");
+pref("mizu.tabsync.device-id", "");
 
 // Link hints. Ctrl+G labels every clickable element in the tab; typing a label
 // activates it, and Ctrl+Shift+G opens links in a background tab instead.

@@ -53,12 +53,17 @@ MIZU_BUILD_MODE=full ./mizu run
 
 ## Install on Arch Linux
 
-Tagged releases include a native pacman package for x86-64 Arch Linux. Install
-or upgrade the latest release with:
+From a repository checkout, install the newest package in `dist/` with one
+command. If `dist/` has no package, the installer downloads and verifies the
+latest tagged release instead:
 
 ```bash
-sudo pacman -U https://github.com/HydroHomie31415/MizuBrowser-desktop/releases/latest/download/mizu-browser-x86_64.pkg.tar.zst
+./install.sh
 ```
+
+You can also select a package explicitly with `./install.sh /path/to/package`
+or use the equivalent `./mizu install` command. The installer checks that the
+file is a Mizu package before asking pacman to install it.
 
 To publish a release, push a version tag such as `v0.1.0`. GitHub Actions builds
 Mizu, creates the Arch package, publishes its SHA-256 checksum, and attaches both
@@ -79,6 +84,7 @@ The resulting package is written to `dist/` and can be installed with
 | `./mizu bootstrap` | Fetch source and run Mozilla's prerequisite installer |
 | `./mizu sync` | Reinstall Mizu's overlay into the Firefox checkout |
 | `./mizu build` | Sync and build Mizu |
+| `./mizu install [PACKAGE]` | Install a local package or the latest Arch release |
 | `./mizu extensions` | Install the bundled extensions into the build |
 | `./mizu run [args...]` | Run with a separate development profile |
 | `./mizu package` | Produce a release-style archive |
@@ -177,6 +183,55 @@ Page Down, Enter and Escape keys. Prefix a query to restrict its source:
 | `>` | Browser commands |
 | `@` | Open tabs across all Mizu windows |
 | `^` | History and bookmarks |
+
+## Same-network tab sync
+
+Mizu can publish normal open web tabs to the companion mobile browser while
+both devices are on the same private network. This behaves like a synced-tabs
+list: opening a remote entry creates a local tab, while closing a tab never
+silently closes the copy on the other device. Private-window tabs and internal
+pages such as `about:config` are not shared.
+
+To pair the clients:
+
+1. On desktop, press `Ctrl+Space`, search for **Pair a phone for tab sync**, and
+   run it. Tab sync turns on and a pairing code appears, with the address, port
+   and profile-specific token printed underneath it.
+2. On mobile, open **Settings → Tab sync → Scan code** and point the camera at
+   the desktop screen. The desktop dialog reports the device as soon as it syncs.
+3. Desktop tabs appear in the mobile settings panel. Mobile tabs appear among
+   the desktop command palette's `@` tab results.
+
+The pairing code carries a `mizu://tabsync` URL, and nothing beyond it is needed
+to connect:
+
+```
+mizu://tabsync?v=1&server=192.168.1.20%3A8765&token=<token>&name=<desktop>&alt=<host%3Aport,...>
+```
+
+`server` is the desktop's best address and `alt` carries the rest, so a phone
+that cannot reach the first one tries the others before anyone types an address
+in. The addresses come from the desktop's own network interfaces as well as from
+resolving its host name: on a machine running Docker or a virtual machine, that
+name frequently resolves to the bridge interface, which answers on the desktop
+and nowhere else. Container and virtual-machine ranges are therefore ranked
+behind ordinary LAN addresses, and IPv6 behind IPv4. A device that cannot scan can still be paired
+by hand: the same address and token are on screen, and **Settings → Tab sync**
+accepts them typed. Use **New token** in the pairing dialog to retire the
+current token; every device paired with it stops syncing until it scans again.
+
+The desktop listener is off by default, accepts only private/link-local source
+addresses, and requires the pairing token on every request. The mobile client
+also resolves and rejects non-private server addresses before sending that
+token. The transport is local HTTP rather than Internet sync, so use it only on
+a network you trust. Because the code is the credential, treat a photograph of
+it the way you would treat the token itself.
+
+| Preference | Default | Purpose |
+| --- | --- | --- |
+| `mizu.tabsync.enabled` | `false` | Listen for paired devices on the LAN |
+| `mizu.tabsync.port` | `8765` | LAN listener port |
+| `mizu.tabsync.token` | generated | Long shared pairing credential |
 
 Commands include creating and restoring tabs, opening windows, pinning,
 muting, bookmarking, opening the Places libraries, settings and fullscreen.

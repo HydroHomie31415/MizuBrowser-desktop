@@ -4,6 +4,7 @@
 
 var MizuCommandPaletteLazy = {};
 ChromeUtils.defineESModuleGetters(MizuCommandPaletteLazy, {
+  MizuTabSync: "resource:///modules/MizuTabSync.sys.mjs",
   SearchService: "moz-src:///toolkit/components/search/SearchService.sys.mjs",
 });
 
@@ -334,6 +335,20 @@ var MizuCommandPalette = {
         });
       }
     }
+    for (let tab of MizuCommandPaletteLazy.MizuTabSync.remoteTabs) {
+      if (!this._matches(text, tab.title, tab.url, tab.deviceName)) {
+        continue;
+      }
+      results.push({
+        kind: "tab",
+        label: tab.title || tab.url,
+        detail: tab.url,
+        badge: tab.deviceName,
+        icon: `page-icon:${tab.url}`,
+        lastAccessed: tab.updatedAt,
+        run: () => this._openURL(tab.url),
+      });
+    }
     return results.sort((a, b) => b.lastAccessed - a.lastAccessed);
   },
 
@@ -417,6 +432,23 @@ var MizuCommandPalette = {
         run: () => openPreferences(),
       },
       {
+        label: MizuCommandPaletteLazy.MizuTabSync.enabled
+          ? "Show the tab sync pairing code"
+          : "Pair a phone for tab sync",
+        detail: MizuCommandPaletteLazy.MizuTabSync.enabled
+          ? "Scan this desktop's code from the Mizu mobile browser"
+          : "Share non-private open tabs with devices on this network",
+        keywords: "mobile phone lan local network pair token qr code scan",
+        run: () => MizuTabSyncPairing.open(),
+      },
+      {
+        label: "Disable tab sync",
+        detail: "Stop accepting tab sync connections",
+        keywords: "mobile phone lan local network stop",
+        hidden: !MizuCommandPaletteLazy.MizuTabSync.enabled,
+        run: () => Services.prefs.setBoolPref("mizu.tabsync.enabled", false),
+      },
+      {
         label: "Toggle fullscreen",
         detail: "Enter or leave fullscreen",
         keywords: "full screen presentation",
@@ -433,6 +465,7 @@ var MizuCommandPalette = {
 
   _commandResults(text) {
     return this._commands()
+      .filter(command => !command.hidden)
       .filter(command =>
         this._matches(text, command.label, command.detail, command.keywords)
       )

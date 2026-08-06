@@ -1,0 +1,62 @@
+# Package Mizu's tab sync pairing dialog: the window script that draws the
+# pairing code and its stylesheet.
+#
+# The dialog exists because the pairing credential is too long to read off a
+# screen and type into a phone. It encodes the desktop's address and token into
+# a QR code with Firefox's own encoder (toolkit/components/qrcode), which is
+# already in the build for Firefox Accounts pairing, and it keeps the typed
+# details underneath the code because a desktop can have an address no phone on
+# the network resolves.
+#
+# The code is drawn in the window rather than in a dialog document of its own:
+# it is opened from the command palette, which is a window script too, and a
+# separate XUL document would have to be packaged, localised and kept in step
+# with the theme for a panel that shows one image and three buttons.
+#
+# As with the tab sync service in 0010, this addition sits outside the context
+# of the Mizu patches around it, so every patch still applies and reverses on
+# its own.
+diff --git a/browser/base/content/browser-main.js b/browser/base/content/browser-main.js
+--- a/browser/base/content/browser-main.js
++++ b/browser/base/content/browser-main.js
+@@ -8,6 +8,7 @@
+   Services.scriptloader.loadSubScript("chrome://browser/content/browser-init.js", this);
+   Services.scriptloader.loadSubScript("chrome://global/content/contentAreaUtils.js", this);
+   Services.scriptloader.loadSubScript("chrome://browser/content/browser-captivePortal.js", this);
++  Services.scriptloader.loadSubScript("chrome://browser/content/browser-mizu-tabsync.js", this);
+   if (AppConstants.MOZ_DATA_REPORTING) {
+     Services.scriptloader.loadSubScript("chrome://browser/content/browser-data-submission-info-bar.js", this);
+   }
+diff --git a/browser/base/jar.mn b/browser/base/jar.mn
+--- a/browser/base/jar.mn
++++ b/browser/base/jar.mn
+@@ -40,6 +40,7 @@ browser.jar:
+         content/browser/browser-captivePortal.js      (content/browser-captivePortal.js)
+         content/browser/browser-commands.js           (content/browser-commands.js)
+         content/browser/browser-context.js            (content/browser-context.js)
++        content/browser/browser-mizu-tabsync.js       (content/browser-mizu-tabsync.js)
+         content/browser/browser-customization.js      (content/browser-customization.js)
+         content/browser/browser-data-submission-info-bar.js (content/browser-data-submission-info-bar.js)
+ #ifndef MOZILLA_OFFICIAL
+diff --git a/browser/themes/shared/browser-shared.css b/browser/themes/shared/browser-shared.css
+--- a/browser/themes/shared/browser-shared.css
++++ b/browser/themes/shared/browser-shared.css
+@@ -22,6 +22,7 @@
+ @import url("chrome://browser/skin/urlbar/variables.css");
+ @import url("chrome://browser/skin/urlbar/view.css");
+ @import url("chrome://browser/skin/urlbar-searchbar.css");
++@import url("chrome://browser/skin/browser-mizu-tabsync.css");
+ @import url("chrome://browser/skin/identity-block/identity-block.css");
+ @import url("chrome://browser/skin/notification-icons.css");
+ @import url("chrome://browser/skin/addon-notification.css");
+diff --git a/browser/themes/shared/jar.inc.mn b/browser/themes/shared/jar.inc.mn
+--- a/browser/themes/shared/jar.inc.mn
++++ b/browser/themes/shared/jar.inc.mn
+@@ -25,6 +25,7 @@
+   skin/classic/browser/menupanel.css                           (../shared/menupanel.css)
+   skin/classic/browser/notification-icons.css                  (../shared/notification-icons.css)
+   skin/classic/browser/pageInfo.css                            (../shared/pageInfo.css)
++  skin/classic/browser/browser-mizu-tabsync.css                (../shared/browser-mizu-tabsync.css)
+   skin/classic/browser/sanitizeDialog_v2.css                   (../shared/sanitizeDialog_v2.css)
+   skin/classic/browser/setDesktopBackground.css                (../shared/setDesktopBackground.css)
+   skin/classic/browser/sidebar.css                             (../shared/sidebar.css)

@@ -1,0 +1,16 @@
+# Package Mizu's profile-local LAN tab-sync service. The command palette imports
+# the singleton and is also its deliberately explicit enable/pairing UI.
+diff --git a/browser/modules/moz.build b/browser/modules/moz.build
+--- a/browser/modules/moz.build
++++ b/browser/modules/moz.build
+@@ -151,6 +151,10 @@ EXTRA_JS_MODULES += [
+     "ZoomUI.sys.mjs",
+ ]
+ 
++EXTRA_JS_MODULES += [
++    "MizuTabSync.sys.mjs",
++]
++
+ MOZ_SRC_FILES += [
+     "CanvasPermissionPromptHelper.sys.mjs",
+     "ContextId.sys.mjs",

@@ -3,16 +3,21 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 import { ContentDOMReference } from "resource://gre/modules/ContentDOMReference.sys.mjs";
-import { Anime4KRenderer } from "resource:///actors/Anime4KRenderer.sys.mjs";
-import {
-  MizuMediaBridge,
-  preferredLevel,
-} from "resource:///actors/MizuMediaBridge.sys.mjs";
-import {
-  EXTRAS,
-  MODES,
-  QUALITY_TIERS,
-} from "resource:///actors/Anime4KLibrary.sys.mjs";
+
+// This actor is instantiated in every frame of every page, but none of the
+// modules below are touched until a player is actually opened, and Anime4K is
+// off by default. Imported eagerly they cost every content process the parse
+// of the renderer, the shader library and the media bridge on its first page.
+const lazy = {};
+
+ChromeUtils.defineESModuleGetters(lazy, {
+  Anime4KRenderer: "resource:///actors/Anime4KRenderer.sys.mjs",
+  EXTRAS: "resource:///actors/Anime4KLibrary.sys.mjs",
+  MODES: "resource:///actors/Anime4KLibrary.sys.mjs",
+  MizuMediaBridge: "resource:///actors/MizuMediaBridge.sys.mjs",
+  QUALITY_TIERS: "resource:///actors/Anime4KLibrary.sys.mjs",
+  preferredLevel: "resource:///actors/MizuMediaBridge.sys.mjs",
+});
 
 const PLAYER_ID = "mizu-video-player-host";
 
@@ -36,8 +41,10 @@ export class MizuVideoChild extends JSWindowActorChild {
     this._stateTimer = null;
     this._progressTimer = null;
     this._destroyed = false;
-    this._observer = new this.contentWindow.MutationObserver(() =>
-      this._scheduleState()
+    this._isYouTube = false;
+    this._lastState = "";
+    this._observer = new this.contentWindow.MutationObserver(records =>
+      this._onMutations(records)
     );
     this._shortsPrefObserver = () => this._applyYouTubePolicy(true);
     Services.prefs.addObserver(
@@ -80,8 +87,14 @@ export class MizuVideoChild extends JSWindowActorChild {
       this._observeDocument();
     }
     if (event.type == "timeupdate") {
+      // Only the resume position moves here, and that is sampled slowly. A
+      // playing video fires this several times a second in every frame, so
+      // running the state pass from it would undo that thrift and re-measure
+      // a video whose size and playing state have not changed.
       this._scheduleProgress();
-    } else if (
+      return;
+    }
+    if (
       event.type == "play" ||
       event.type == "playing" ||
       event.type == "pause" ||
@@ -91,6 +104,44 @@ export class MizuVideoChild extends JSWindowActorChild {
       this._scheduleProgress(true);
     }
     this._scheduleState();
+  }
+
+  /**
+   * Mutation batches are the hottest callback a scripted page has, and this
+   * actor runs in every frame of every page whether or not one holds a video.
+   * Only two things here care that the DOM changed: a <video> arriving or
+   * leaving changes what the toolbar button and the player have to offer, and
+   * YouTube moves between Shorts and watch pages without ever firing pageshow.
+   * Everything else can be dropped without looking at the document at all.
+   */
+  _onMutations(records) {
+    if (this._isYouTube) {
+      this._scheduleState();
+      return;
+    }
+    for (let record of records) {
+      if (
+        this._containsVideo(record.addedNodes) ||
+        this._containsVideo(record.removedNodes)
+      ) {
+        this._scheduleState();
+        return;
+      }
+    }
+  }
+
+  _containsVideo(nodes) {
+    for (let node of nodes) {
+      // Text nodes are the bulk of what a page mutates and have nothing to
+      // search, so the type check comes before any selector work.
+      if (node.nodeType != node.ELEMENT_NODE) {
+        continue;
+      }
+      if (node.localName == "video" || node.querySelector?.("video")) {
+        return true;
+      }
+    }
+    return false;
   }
 
   receiveMessage(message) {
@@ -111,6 +162,13 @@ export class MizuVideoChild extends JSWindowActorChild {
 
   _observeDocument() {
     this._observer?.disconnect();
+    // Whether this document needs the YouTube policy re-run on every mutation
+    // is fixed for its lifetime, so it is settled once here rather than being
+    // re-tested inside the mutation callback.
+    this._isYouTube = /(^|\.)youtube\.com$/.test(
+      this.contentWindow?.location.hostname ?? ""
+    );
+    this._lastState = "";
     let root = this.document.documentElement;
     if (root) {
       this._observer.observe(root, { childList: true, subtree: true });
@@ -263,7 +321,16 @@ export class MizuVideoChild extends JSWindowActorChild {
       // outlived its actor threw and the toolbar button stopped updating.
       if (!this._destroyed) {
         this._applyYouTubePolicy();
-        this.sendAsyncMessage("MizuVideo:State", this._status());
+        let status = this._status();
+        // Both consumers in the parent just store the latest state per frame
+        // and re-derive from it, so repeating one it already holds only costs
+        // an IPC message and a toolbar button update. A page that mutates
+        // continuously would otherwise send one ten times a second, forever.
+        let signature = JSON.stringify(status);
+        if (signature != this._lastState) {
+          this._lastState = signature;
+          this.sendAsyncMessage("MizuVideo:State", status);
+        }
       }
     }, 100);
   }
@@ -478,7 +545,7 @@ class Player {
     this._configureSettings();
     this._listen();
     this._watchDocument();
-    this.bridge = new MizuMediaBridge(this.video, this.window);
+    this.bridge = new lazy.MizuMediaBridge(this.video, this.window);
     this._updateControls();
     this._applySubtitleStyle();
     this._pollMedia();
@@ -650,15 +717,15 @@ class Player {
   }
 
   _anime4kMarkup() {
-    let modes = MODES.map(
+    let modes = lazy.MODES.map(
       mode =>
         `<option value="${mode.id}" title="${mode.note}">${mode.label}</option>`
     ).join("");
-    let tiers = QUALITY_TIERS.map(
+    let tiers = lazy.QUALITY_TIERS.map(
       tier =>
         `<option value="${tier.id}" title="${tier.note}">${tier.label} (${tier.id})</option>`
     ).join("");
-    let extras = EXTRAS.map(
+    let extras = lazy.EXTRAS.map(
       extra => `
         <label title="${extra.note}"><span>${extra.label}</span>
           <input data-extra="${extra.id}" type="checkbox"></label>`
@@ -1009,7 +1076,7 @@ class Player {
   }
 
   _updateChainSummary() {
-    let mode = MODES.find(entry => entry.id == this.settings.anime4kMode);
+    let mode = lazy.MODES.find(entry => entry.id == this.settings.anime4kMode);
     this.root.querySelector(".chain-summary").textContent = mode
       ? mode.note
       : "";
@@ -1387,6 +1454,10 @@ class Player {
       ? "▶"
       : "❚❚";
     this.root.querySelector(".center-play").hidden = !this.video.paused;
+    // Mirrored onto the host so the idle-pointer rule can tell playback from a
+    // pause the page started, which leaves the controls hidden but should still
+    // bring the cursor back.
+    this.host.toggleAttribute("playing", !this.video.paused);
     this.root.querySelector(".speed").value = String(this.video.playbackRate);
     this.root.querySelector(".quality").textContent = this.video.videoWidth
       ? `${this.video.videoWidth} × ${this.video.videoHeight}`
@@ -1544,7 +1615,7 @@ class Player {
       this.bridge.selectQuality("auto");
       return;
     }
-    let wanted = preferredLevel(levels, this.settings.preferredQuality);
+    let wanted = lazy.preferredLevel(levels, this.settings.preferredQuality);
     if (!wanted) {
       return;
     }
@@ -2088,7 +2159,7 @@ class Player {
     }
 
     try {
-      this.anime4k = new Anime4KRenderer(
+      this.anime4k = new lazy.Anime4KRenderer(
         this.canvas,
         this.video,
         this.window,
@@ -2270,6 +2341,8 @@ const PLAYER_STYLES = `
   header { top:0; gap:10px; transform:translateY(-12px); }
   footer { bottom:0; flex-direction:column; align-items:stretch; gap:10px; padding-top:48px; transform:translateY(12px); background:linear-gradient(transparent,rgba(0,0,0,.88)); }
   header.controls-visible,footer.controls-visible { opacity:1; transform:none; pointer-events:auto; }
+  /* The pointer goes idle with the controls, and a mousemove brings both back. */
+  :host([playing]:not([controls-visible])) { cursor:none!important; }
   .brand { font-weight:600; font-size:15px; }
   .quality { color:#b1b1b3; font-size:12px; }
   .chapter { color:#d7d7db; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

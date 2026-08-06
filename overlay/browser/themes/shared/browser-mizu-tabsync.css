@@ -1,0 +1,134 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+
+/* stylelint-disable stylelint-plugin-mozilla/use-design-tokens */
+
+.mizu-tabsync-pairing {
+  width: min(26rem, calc(100vw - 32px));
+  max-width: none;
+  padding: 0;
+  color: var(--toolbar-color);
+  background: var(--toolbar-bgcolor);
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 14px;
+  box-shadow: 0 20px 70px rgb(0 0 0 / 55%);
+
+  &::backdrop {
+    background: rgb(0 0 0 / 42%);
+    backdrop-filter: blur(2px);
+  }
+}
+
+.mizu-tabsync-frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 22px;
+  font: menu;
+}
+
+.mizu-tabsync-title {
+  margin: 0;
+  font: menu;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.mizu-tabsync-subtitle,
+.mizu-tabsync-status,
+.mizu-tabsync-code-error {
+  margin: 0;
+  color: color-mix(in srgb, currentColor 68%, transparent);
+  font-size: 0.85rem;
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* The code is read by a camera, so it keeps its own light surface whatever the
+   theme around it is doing. */
+.mizu-tabsync-code {
+  display: grid;
+  width: 15rem;
+  min-height: 15rem;
+  place-items: center;
+  padding: 12px;
+  background: #fff;
+  border-radius: 10px;
+}
+
+.mizu-tabsync-qr {
+  width: 100%;
+  image-rendering: pixelated;
+}
+
+.mizu-tabsync-code-error {
+  color: #15141a;
+}
+
+.mizu-tabsync-details {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px;
+  background: color-mix(in srgb, currentColor 7%, transparent);
+  border-radius: 9px;
+}
+
+.mizu-tabsync-detail {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+
+  & dt {
+    flex: 0 0 4.5rem;
+    color: color-mix(in srgb, currentColor 62%, transparent);
+    font-size: 0.78rem;
+  }
+}
+
+.mizu-tabsync-value {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+  font-family: monospace;
+  font-size: 0.8rem;
+  user-select: text;
+  word-break: break-all;
+}
+
+.mizu-tabsync-token {
+  color: color-mix(in srgb, currentColor 78%, transparent);
+}
+
+.mizu-tabsync-buttons {
+  display: flex;
+  width: 100%;
+  justify-content: end;
+  gap: 8px;
+}
+
+.mizu-tabsync-button {
+  padding: 6px 12px;
+  color: inherit;
+  background: color-mix(in srgb, currentColor 9%, transparent);
+  border: 0;
+  border-radius: 7px;
+  font: menu;
+
+  &:hover {
+    background: color-mix(in srgb, currentColor 16%, transparent);
+  }
+}
+
+.mizu-tabsync-button-primary {
+  color: var(--button-primary-color, #fff);
+  background: var(--button-primary-bgcolor, #0060df);
+
+  &:hover {
+    background: var(--button-primary-bgcolor-hover, #0250bb);
+  }
+}

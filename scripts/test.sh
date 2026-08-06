@@ -35,6 +35,7 @@ trap - EXIT
 note "Checking required product files"
 required_files=(
   .github/workflows/release-linux.yml
+  install.sh
   config/upstream.env
   config/extensions.env
   config/policies.json
@@ -67,6 +68,9 @@ required_files=(
   overlay/browser/actors/Anime4KRenderer.sys.mjs
   overlay/browser/actors/MizuGesturesChild.sys.mjs
   overlay/browser/modules/MizuGestureActions.sys.mjs
+  overlay/browser/modules/MizuTabSync.sys.mjs
+  overlay/browser/base/content/browser-mizu-tabsync.js
+  overlay/browser/themes/shared/browser-mizu-tabsync.css
   overlay/browser/components/preferences/config/mizu-gestures.mjs
   overlay/browser/components/preferences/widgets/mizu-gesture-list/mizu-gesture-list.mjs
   overlay/browser/components/preferences/widgets/mizu-gesture-list/mizu-gesture-list.css
@@ -95,6 +99,8 @@ required_files=(
   patches/0007-add-mizu-mouse-gestures.patch
   patches/0008-add-mizu-gesture-settings.patch
   patches/0009-add-mizu-continue-watching.patch
+  patches/0010-add-mizu-tab-sync.patch
+  patches/0011-add-mizu-tab-sync-pairing.patch
   packaging/arch/mizu.desktop
   packaging/arch/mizu.svg
   packaging/arch/package.sh
@@ -115,6 +121,52 @@ for palette_pref in enabled max-results open-on-new-tab; do
     "$PROJECT_ROOT/overlay/browser/branding/mizu/pref/firefox-branding.js" ||
     die "missing command palette default: $palette_pref"
 done
+for tabsync_pref in enabled port token device-id; do
+  grep -q "pref(\"mizu.tabsync.$tabsync_pref\"" \
+    "$PROJECT_ROOT/overlay/browser/branding/mizu/pref/firefox-branding.js" ||
+    die "missing tab sync default: $tabsync_pref"
+done
+grep -q 'MizuTabSync.sys.mjs' "$PROJECT_ROOT/patches/0010-add-mizu-tab-sync.patch" ||
+  die "tab sync service is not packaged"
+grep -q 'PrivateBrowsingUtils.isWindowPrivate' \
+  "$PROJECT_ROOT/overlay/browser/modules/MizuTabSync.sys.mjs" ||
+  die "tab sync does not exclude private windows"
+grep -q 'isPrivateAddress(transport.host)' \
+  "$PROJECT_ROOT/overlay/browser/modules/MizuTabSync.sys.mjs" ||
+  die "tab sync does not restrict clients to private networks"
+# Pairing is the only way the token reaches a phone, so the dialog that draws it
+# and the stylesheet that keeps it scannable both have to reach the build.
+for pairing_path in browser-mizu-tabsync.js browser-mizu-tabsync.css; do
+  grep -q "$pairing_path" \
+    "$PROJECT_ROOT/patches/0011-add-mizu-tab-sync-pairing.patch" ||
+    die "tab sync pairing is not packaged: $pairing_path"
+done
+grep -q 'loadSubScript("chrome://browser/content/browser-mizu-tabsync.js"' \
+  "$PROJECT_ROOT/patches/0011-add-mizu-tab-sync-pairing.patch" ||
+  die "tab sync pairing dialog is not loaded into browser windows"
+# An address the desktop only reaches itself by is not worth encoding, and a
+# code drawn from one would fail on the phone rather than in the dialog.
+for pairing_guard in isLoopbackAddress isScopedAddress; do
+  grep -q "$pairing_guard" \
+    "$PROJECT_ROOT/overlay/browser/modules/MizuTabSync.sys.mjs" ||
+    die "tab sync pairing offers unreachable addresses: $pairing_guard"
+done
+grep -q 'mizu://tabsync' \
+  "$PROJECT_ROOT/overlay/browser/modules/MizuTabSync.sys.mjs" ||
+  die "tab sync pairing does not produce a scannable pairing URL"
+grep -q 'toolkit/components/qrcode/encoder.mjs' \
+  "$PROJECT_ROOT/overlay/browser/base/content/browser-mizu-tabsync.js" ||
+  die "tab sync pairing does not use the in-tree QR encoder"
+# Resolving the desktop's own host name reports what a name server believes,
+# which on a machine running containers is regularly a bridge no phone can
+# reach. The interfaces themselves are the authority, and their addresses are
+# ranked so the code offers a routable one first.
+grep -q 'RTCPeerConnection' \
+  "$PROJECT_ROOT/overlay/browser/base/content/browser-mizu-tabsync.js" ||
+  die "tab sync pairing does not enumerate this desktop's own interfaces"
+grep -q 'VIRTUAL_ADDRESSES' \
+  "$PROJECT_ROOT/overlay/browser/modules/MizuTabSync.sys.mjs" ||
+  die "tab sync pairing does not rank container bridges behind routable addresses"
 
 # Link hints label every frame in a tab at once, so the actor pair, the chrome
 # session that hands out the labels, and the defaults all have to stay wired up.
@@ -373,6 +425,10 @@ if popup.get("Value") is not False or popup.get("Status") != "locked":
 PY
 grep -Fq 'arch-package)' "$PROJECT_ROOT/mizu" ||
   die "arch-package command is not routed by ./mizu"
+grep -Fq 'install)' "$PROJECT_ROOT/mizu" ||
+  die "install command is not routed by ./mizu"
+grep -Fq 'pacman -U --needed' "$PROJECT_ROOT/install.sh" ||
+  die "Arch installer does not install its validated package"
 grep -Fq 'Exec=mizu %u' "$PROJECT_ROOT/packaging/arch/mizu.desktop" ||
   die "Arch desktop launcher does not start Mizu"
 
