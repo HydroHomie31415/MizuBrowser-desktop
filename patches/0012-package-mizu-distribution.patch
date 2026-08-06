@@ -1,0 +1,11 @@
+diff --git a/browser/installer/package-manifest.in b/browser/installer/package-manifest.in
+--- a/browser/installer/package-manifest.in
++++ b/browser/installer/package-manifest.in
+@@ -457,6 +457,5 @@
+ @BINPATH@/desktop-launcher/desktop-launcher@BIN_SUFFIX@
+ #endif
+ 
+-#if defined(BUILT_BY_MOZILLA)
++; Mizu supplies its own verified distribution extensions and policies.
+ @RESPATH@/distribution/*
+-#endif

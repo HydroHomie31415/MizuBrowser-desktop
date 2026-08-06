@@ -21,7 +21,7 @@ Commands:
   bootstrap       Fetch source and install Mozilla build prerequisites
   sync            Install branding, product files, and patches
   build           Build the selected configuration
-  install         Install a local package or the latest Arch Linux release
+  install         Build and install the latest state of this checkout
   extensions      Install the bundled extensions into the build
   run             Run Mizu with an isolated development profile
   package         Create a release-style package

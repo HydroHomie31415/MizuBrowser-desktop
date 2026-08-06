@@ -9,6 +9,10 @@ version=${1:-}
   die "Arch packages are currently supported only for Linux x86_64"
 
 "$SCRIPT_DIR/sync.sh"
+# A developer may package an existing build without running ./mizu build in the
+# same shell. Refresh the distribution payload so bundled extensions and their
+# policies can never be omitted from that package.
+"$SCRIPT_DIR/extensions.sh"
 run_mach package
 
 object_dir="$FIREFOX_DIR/obj-mizu-$(build_mode)"

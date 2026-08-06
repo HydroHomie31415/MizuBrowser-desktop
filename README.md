@@ -53,17 +53,18 @@ MIZU_BUILD_MODE=full ./mizu run
 
 ## Install on Arch Linux
 
-From a repository checkout, install the newest package in `dist/` with one
-command. If `dist/` has no package, the installer downloads and verifies the
-latest tagged release instead:
+From a repository checkout, build and install its current state with one
+command:
 
 ```bash
 ./install.sh
 ```
 
-You can also select a package explicitly with `./install.sh /path/to/package`
-or use the equivalent `./mizu install` command. The installer checks that the
-file is a Mizu package before asking pacman to install it.
+The equivalent `./mizu install` command follows the same pipeline. Every run
+syncs the overlay, rebuilds the browser, refreshes the bundled extensions,
+creates a uniquely versioned package in `dist/`, validates it, and asks pacman
+to install that exact build. If the Firefox checkout does not exist yet, the
+installer bootstraps it first.
 
 To publish a release, push a version tag such as `v0.1.0`. GitHub Actions builds
 Mizu, creates the Arch package, publishes its SHA-256 checksum, and attaches both
@@ -84,7 +85,7 @@ The resulting package is written to `dist/` and can be installed with
 | `./mizu bootstrap` | Fetch source and run Mozilla's prerequisite installer |
 | `./mizu sync` | Reinstall Mizu's overlay into the Firefox checkout |
 | `./mizu build` | Sync and build Mizu |
-| `./mizu install [PACKAGE]` | Install a local package or the latest Arch release |
+| `./mizu install` | Build and install the latest state of this checkout |
 | `./mizu extensions` | Install the bundled extensions into the build |
 | `./mizu run [args...]` | Run with a separate development profile |
 | `./mizu package` | Produce a release-style archive |

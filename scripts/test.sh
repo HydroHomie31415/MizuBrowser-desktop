@@ -101,6 +101,7 @@ required_files=(
   patches/0009-add-mizu-continue-watching.patch
   patches/0010-add-mizu-tab-sync.patch
   patches/0011-add-mizu-tab-sync-pairing.patch
+  patches/0012-package-mizu-distribution.patch
   packaging/arch/mizu.desktop
   packaging/arch/mizu.svg
   packaging/arch/package.sh
@@ -429,6 +430,15 @@ grep -Fq 'install)' "$PROJECT_ROOT/mizu" ||
   die "install command is not routed by ./mizu"
 grep -Fq 'pacman -U --needed' "$PROJECT_ROOT/install.sh" ||
   die "Arch installer does not install its validated package"
+grep -Fq '"$SCRIPT_DIR/mizu" build' "$PROJECT_ROOT/install.sh" ||
+  die "Arch installer does not rebuild the current checkout"
+grep -Fq '"$SCRIPT_DIR/mizu" arch-package' "$PROJECT_ROOT/install.sh" ||
+  die "Arch installer does not package the current checkout"
+grep -Fq '"$SCRIPT_DIR/extensions.sh"' "$PROJECT_ROOT/scripts/arch-package.sh" ||
+  die "Arch package creation does not refresh bundled extensions"
+grep -Fq '@RESPATH@/distribution/*' \
+  "$PROJECT_ROOT/patches/0012-package-mizu-distribution.patch" ||
+  die "Mizu extensions are not included in release packages"
 grep -Fq 'Exec=mizu %u' "$PROJECT_ROOT/packaging/arch/mizu.desktop" ||
   die "Arch desktop launcher does not start Mizu"
 
