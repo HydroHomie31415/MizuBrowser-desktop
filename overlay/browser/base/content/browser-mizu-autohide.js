@@ -95,6 +95,10 @@ var MizuChrome = {
     window.addEventListener("aftercustomization", this);
 
     this.update();
+
+    // Last, because it is a one-off repair of the toolbar's contents rather
+    // than part of the column, and nothing above it should depend on it.
+    this._ensureDownloadsButton();
   },
 
   uninit() {
@@ -118,6 +122,43 @@ var MizuChrome = {
     this._resizeObserver = null;
     this._deactivate();
     this._uninstallColumn();
+  },
+
+  // Upstream keeps a second, much shorter set of default #nav-bar placements
+  // for vertical tabs, and the downloads button is not in it. Mizu turns
+  // sidebar.verticalTabs on before a profile has ever been built, so that is
+  // the list every new profile is created from: the button is never placed at
+  // all, and since it is also what the downloads panel anchors to and what
+  // carries the progress indicator, downloads have nowhere to appear.
+  //
+  // So place it once, and record that it has been done -- a profile that has
+  // already been through this keeps whatever the user did afterwards, removing
+  // the button included.
+  _ensureDownloadsButton() {
+    let pref = `${this.PREF_BRANCH}downloads-button-placed`;
+    if (Services.prefs.getBoolPref(pref, false)) {
+      return;
+    }
+
+    if (!CustomizableUI.getPlacementOfWidget("downloads-button")) {
+      // Upstream orders the button just after the address bar. In the column
+      // the bar wraps onto a row of its own, so this only decides where in the
+      // icon row above it the button lands.
+      let placements = CustomizableUI.getWidgetIdsInArea(
+        CustomizableUI.AREA_NAVBAR
+      );
+      let urlbar = placements.indexOf("urlbar-container");
+      CustomizableUI.addWidgetToArea(
+        "downloads-button",
+        CustomizableUI.AREA_NAVBAR,
+        urlbar == -1 ? placements.length : urlbar + 1
+      );
+    }
+
+    // Only once the placement has actually gone through, so that a window that
+    // came up before CustomizableUI had restored the toolbar leaves the work
+    // for the next one rather than marking it done.
+    Services.prefs.setBoolPref(pref, true);
   },
 
   // Native fullscreen has its own autohide, and customize mode needs the real
@@ -284,14 +325,22 @@ var MizuChrome = {
     return !!(node && sidebar && sidebar.contains(node));
   },
 
-  // A panel anchored inside the column has to keep it on screen, or the panel
-  // loses its anchor mid-interaction. Tooltips and tab previews are transient
-  // and deliberately excluded, matching FullScreen._setPopupOpen. Panels are
-  // often reparented to the document root, so the anchor is checked rather
-  // than the panel itself.
+  // A panel anchored inside the column has to bring it on screen and keep it
+  // there, or the panel hangs off an anchor that is not where it appears to
+  // be. Most of the time the column is already revealed, because the click
+  // that opened the panel happened in it -- but a panel can also open on its
+  // own, and the downloads panel opening as a download starts is the case that
+  // matters: it is anchored to a button that is currently a column-width
+  // off-screen. Arrow panels follow their anchor, so revealing the column
+  // after the panel is shown slides the panel into place along with it.
+  //
+  // Tooltips and tab previews are transient and deliberately excluded,
+  // matching FullScreen._setPopupOpen. Panels are often reparented to the
+  // document root, so the anchor is checked rather than the panel itself.
   _onPopupChanged(event) {
     let popup = event.originalTarget;
     if (
+      !this._active ||
       !popup ||
       popup.localName == "tooltip" ||
       popup.id == "tab-preview-panel"
@@ -301,6 +350,7 @@ var MizuChrome = {
     if (event.type == "popupshown") {
       if (this.contains(popup.anchorNode || popup.triggerNode)) {
         this._pin("popup");
+        this._reveal();
       }
     } else {
       this._unpin("popup");

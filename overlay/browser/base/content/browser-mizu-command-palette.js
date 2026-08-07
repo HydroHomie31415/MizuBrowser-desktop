@@ -335,20 +335,8 @@ var MizuCommandPalette = {
         });
       }
     }
-    for (let tab of MizuCommandPaletteLazy.MizuTabSync.remoteTabs) {
-      if (!this._matches(text, tab.title, tab.url, tab.deviceName)) {
-        continue;
-      }
-      results.push({
-        kind: "tab",
-        label: tab.title || tab.url,
-        detail: tab.url,
-        badge: tab.deviceName,
-        icon: `page-icon:${tab.url}`,
-        lastAccessed: tab.updatedAt,
-        run: () => this._openURL(tab.url),
-      });
-    }
+    // Tabs from a paired phone are not a separate source: tab sync puts them in
+    // the tab strip, so the windows walked above already have them.
     return results.sort((a, b) => b.lastAccessed - a.lastAccessed);
   },
 
@@ -437,7 +425,7 @@ var MizuCommandPalette = {
           : "Pair a phone for tab sync",
         detail: MizuCommandPaletteLazy.MizuTabSync.enabled
           ? "Scan this desktop's code from the Mizu mobile browser"
-          : "Share non-private open tabs with devices on this network",
+          : "Keep one set of tabs across devices on this network",
         keywords: "mobile phone lan local network pair token qr code scan",
         run: () => MizuTabSyncPairing.open(),
       },

@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+browser=/opt/mizu/mizu
+if [[ ! -x $browser ]]; then
+  browser=/opt/mizu/firefox
+fi
+[[ -x $browser ]] || {
+  printf 'error: Mizu Browser is not installed under /opt/mizu\n' >&2
+  exit 1
+}
+
+if [[ -n ${MIZU_PROFILE:-} ]]; then
+  profile=$MIZU_PROFILE
+else
+  config_root=${XDG_CONFIG_HOME:-}
+  if [[ -z $config_root ]]; then
+    [[ -n ${HOME:-} ]] || {
+      printf 'error: HOME or MIZU_PROFILE is required to locate the Mizu profile\n' >&2
+      exit 1
+    }
+    config_root=$HOME/.config
+  fi
+  profile=$config_root/mizu-browser/profile
+fi
+
+mkdir -p -- "$profile"
+exec "$browser" --profile "$profile" "$@"

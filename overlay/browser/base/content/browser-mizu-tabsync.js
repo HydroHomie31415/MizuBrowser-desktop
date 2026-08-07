@@ -10,6 +10,14 @@ ChromeUtils.defineESModuleGetters(MizuTabSyncPairingLazy, {
   QR: "moz-src:///toolkit/components/qrcode/encoder.mjs",
 });
 
+// Tab sync runs in the parent process, above any one window, but nothing loads
+// it until something asks for it. A window opening with sync already switched
+// on is that ask: the service has to be listening from startup rather than
+// from whenever the pairing dialog is next opened.
+if (Services.prefs.getBoolPref("mizu.tabsync.enabled", false)) {
+  MizuTabSyncPairingLazy.MizuTabSync.init();
+}
+
 /**
  * The pairing side of same-network tab sync: it turns the listener's address
  * and token into a code a phone camera can read, and then waits for that phone
@@ -290,12 +298,10 @@ var MizuTabSyncPairing = {
       this._status.textContent = "Waiting for a device to scan this code…";
       return;
     }
-    this._status.textContent = `Synced with ${peers
-      .map(
-        peer =>
-          `${peer.name} (${peer.tabCount} tab${peer.tabCount == 1 ? "" : "s"})`
-      )
-      .join(", ")}`;
+    let count = MizuTabSyncPairingLazy.MizuTabSync.sharedTabCount;
+    this._status.textContent =
+      `Sharing ${count} tab${count == 1 ? "" : "s"} with ` +
+      peers.map(peer => peer.name).join(", ");
   },
 
   _copyURL(button) {

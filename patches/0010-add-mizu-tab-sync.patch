@@ -1,14 +1,20 @@
 # Package Mizu's profile-local LAN tab-sync service. The command palette imports
 # the singleton and is also its deliberately explicit enable/pairing UI.
+#
+# The merge rules are packaged as a module of their own. They are the half of
+# tab sync that has to reach the same answer as the phone's implementation of
+# them, and keeping them clear of Gecko is what lets them be read, and tested,
+# without a browser window in the way.
 diff --git a/browser/modules/moz.build b/browser/modules/moz.build
 --- a/browser/modules/moz.build
 +++ b/browser/modules/moz.build
-@@ -151,6 +151,10 @@ EXTRA_JS_MODULES += [
+@@ -151,6 +151,11 @@ EXTRA_JS_MODULES += [
      "ZoomUI.sys.mjs",
  ]
- 
+
 +EXTRA_JS_MODULES += [
 +    "MizuTabSync.sys.mjs",
++    "MizuTabSyncState.sys.mjs",
 +]
 +
  MOZ_SRC_FILES += [

@@ -66,6 +66,11 @@ creates a uniquely versioned package in `dist/`, validates it, and asks pacman
 to install that exact build. If the Firefox checkout does not exist yet, the
 installer bootstraps it first.
 
+Desktop launches use a persistent profile at
+`~/.config/mizu-browser/profile`, separate from Firefox and from the temporary
+development profile used by `./mizu run`. Set `MIZU_PROFILE=/path/to/profile`
+when launching from a terminal to choose another location.
+
 To publish a release, push a version tag such as `v0.1.0`. GitHub Actions builds
 Mizu, creates the Arch package, publishes its SHA-256 checksum, and attaches both
 the versioned package and the stable `mizu-browser-x86_64.pkg.tar.zst` download
@@ -149,6 +154,21 @@ have the most alternatives: `Alt+Left`/`Alt+Right`, the mouse side buttons, the
 touchpad swipe and the content context menu. To get them back, delete that rule
 from `browser-mizu-autohide.css`.
 
+The downloads button is placed in the icon row and kept there. Firefox keeps a
+separate, much shorter set of default toolbar contents for vertical tabs which
+leaves that button out, and Mizu turns vertical tabs on before a profile is ever
+built — so left alone, no profile ever gets one, and the download progress
+indicator and the downloads panel's anchor go with it. Mizu places it once per
+profile and records that it has done so, so moving or removing it afterwards
+sticks. It is also not auto-hidden until the first download of the session, the
+way it is upstream: the column is off screen for most of the browser's life, so
+a button that only exists while it is hidden is never seen.
+
+A panel anchored inside the column reveals it, which is what puts the downloads
+panel in the right place when a download starts while the column is away — arrow
+panels follow their anchor, so it slides in with the column rather than hanging
+off a point a column-width off screen.
+
 Vertical tabs are Firefox's own feature; the column and the hiding are Mizu's.
 They live in `overlay/browser/base/content/browser-mizu-autohide.js` and
 `overlay/browser/themes/shared/browser-mizu-autohide.css`, with
@@ -164,6 +184,7 @@ not fire while the pointer is over web content.
 | `mizu.chrome.urlbar-float` | `true` | Expand the focused address bar into a centred panel |
 | `mizu.chrome.trigger-size` | `4` | Width in pixels of the reveal strip at the window edge |
 | `mizu.chrome.hide-delay-ms` | `120` | Grace period before the column slides away again |
+| `mizu.chrome.downloads-button-placed` | `false` | Set once the downloads button has been placed; clear it to place it again |
 
 Changes take effect immediately in open windows. Set `mizu.chrome.autohide` to
 `false` to keep the column permanently on screen, or `mizu.chrome.column` to
@@ -187,21 +208,49 @@ Page Down, Enter and Escape keys. Prefix a query to restrict its source:
 
 ## Same-network tab sync
 
-Mizu can publish normal open web tabs to the companion mobile browser while
-both devices are on the same private network. This behaves like a synced-tabs
-list: opening a remote entry creates a local tab, while closing a tab never
-silently closes the copy on the other device. Private-window tabs and internal
-pages such as `about:config` are not shared.
+Mizu keeps **one set of tabs** across this desktop and the companion mobile
+browser while both devices are on the same private network. A tab from the
+phone is an ordinary tab here, in the tab strip, in the command palette and in
+the session that is restored at startup; a tab opened here is an ordinary tab
+there. Closing one closes it on both devices, and navigating one moves the
+other copy with it. There is no separate list of the other device's tabs,
+because there is no other device's tabs.
 
-To pair the clients:
+What is not shared: private-window tabs, and pages that only mean something on
+one device — `about:` pages, `file:` paths and extension URLs. A tab showing one
+of those is simply not part of the set.
+
+To pair the devices:
 
 1. On desktop, press `Ctrl+Space`, search for **Pair a phone for tab sync**, and
    run it. Tab sync turns on and a pairing code appears, with the address, port
    and profile-specific token printed underneath it.
 2. On mobile, open **Settings → Tab sync → Scan code** and point the camera at
    the desktop screen. The desktop dialog reports the device as soon as it syncs.
-3. Desktop tabs appear in the mobile settings panel. Mobile tabs appear among
-   the desktop command palette's `@` tab results.
+3. The two tab sets merge. Neither device's tabs are discarded to make room for
+   the other's; from then on the set is shared.
+
+Tabs that arrive from the other device are created unloaded, the way session
+restore creates them: a phone with forty tabs costs this desktop forty rows in
+the tab strip rather than forty page loads, and each one loads when it is first
+selected.
+
+Two rules cover the cases where "one shared tab" and "two devices" disagree:
+
+- **A close outranks an edit.** A tab closed on the phone while the desktop was
+  navigating it stays closed, rather than coming back on the next sync. Closing
+  a *window* closes its tabs everywhere; quitting Mizu does not, so the phone
+  keeps them and session restore brings them back here.
+- **The page in front of you is never pulled out from under you.** If a tab is
+  selected in the focused window, a navigation arriving for it from the other
+  device is declined, and this device's URL for that tab wins instead.
+
+The devices exchange the whole set and merge it, rather than sending changes,
+so a phone that was out of range or switched off converges as soon as it is
+back. Each tab carries a revision counter rather than a timestamp, because two
+devices do not share a clock and a phone whose clock is a minute fast must not
+win every conflict for a minute. Closed tabs are remembered for seven days, long
+enough that the other device cannot reintroduce one it has not heard about yet.
 
 The pairing code carries a `mizu://tabsync` URL, and nothing beyond it is needed
 to connect:
@@ -228,11 +277,20 @@ token. The transport is local HTTP rather than Internet sync, so use it only on
 a network you trust. Because the code is the credential, treat a photograph of
 it the way you would treat the token itself.
 
+The phone is the client and the desktop is the listener, so it is the phone that
+connects. A phone with nothing to report and nothing to hear is left holding an
+open request for up to 25 seconds rather than asking again every few seconds,
+which is what makes a tab closed on one device disappear from the other as it
+happens instead of on the next poll.
+
 | Preference | Default | Purpose |
 | --- | --- | --- |
 | `mizu.tabsync.enabled` | `false` | Listen for paired devices on the LAN |
 | `mizu.tabsync.port` | `8765` | LAN listener port |
 | `mizu.tabsync.token` | generated | Long shared pairing credential |
+
+The shared set lives in `mizu-tabsync.json` in the profile, so a tab closed on
+the phone while Mizu was shut down is still closed when it starts again.
 
 Commands include creating and restoring tabs, opening windows, pinning,
 muting, bookmarking, opening the Places libraries, settings and fullscreen.

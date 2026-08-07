@@ -59,6 +59,17 @@ pref("mizu.chrome.urlbar-float", true);
 pref("mizu.chrome.trigger-size", 4);
 // Grace period before a column the pointer has left slides away again.
 pref("mizu.chrome.hide-delay-ms", 120);
+// Set once the downloads button has been placed in the toolbar, so that a
+// profile that has already been through that keeps it wherever the user put it
+// -- or removed it from. See MizuChrome._ensureDownloadsButton.
+pref("mizu.chrome.downloads-button-placed", false);
+
+// Keep the downloads button in the toolbar at all times rather than revealing
+// it with the first download of the session. The column is off-screen for most
+// of the browser's life, so a button that only exists while it is hidden is a
+// button that is never seen; and the icon row it appears in is narrow enough
+// that a button arriving and leaving reflows the whole row.
+pref("browser.download.autohideButton", false);
 
 // Unified command palette. Ctrl+Space opens it from any browser window.
 pref("mizu.palette.enabled", true);

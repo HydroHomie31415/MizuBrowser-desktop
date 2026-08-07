@@ -37,15 +37,13 @@ mapfile -t roots < <(find "$source_dir" -mindepth 1 -maxdepth 1 -type d -print)
 }
 cp -a "${roots[0]}/." "$package_dir/opt/mizu/"
 
-launcher=firefox
-if [[ -x $package_dir/opt/mizu/mizu ]]; then
-  launcher=mizu
-elif [[ ! -x $package_dir/opt/mizu/firefox ]]; then
+if [[ ! -x $package_dir/opt/mizu/mizu && \
+      ! -x $package_dir/opt/mizu/firefox ]]; then
   printf 'error: browser archive contains neither a mizu nor firefox launcher\n' >&2
   exit 1
 fi
 
-ln -s "/opt/mizu/$launcher" "$package_dir/usr/bin/mizu"
+install -Dm755 "$SCRIPT_DIR/mizu-launcher" "$package_dir/usr/bin/mizu"
 install -Dm644 "$SCRIPT_DIR/mizu.desktop" \
   "$package_dir/usr/share/applications/mizu.desktop"
 install -Dm644 "$SCRIPT_DIR/mizu.svg" \

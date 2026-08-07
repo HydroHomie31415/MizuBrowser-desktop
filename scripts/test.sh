@@ -40,6 +40,7 @@ required_files=(
   config/extensions.env
   config/policies.json
   scripts/extensions.sh
+  scripts/tabsync-merge-test.mjs
   scripts/vendor-anime4k.sh
   config/mozconfig.artifact
   config/mozconfig.full
@@ -69,6 +70,7 @@ required_files=(
   overlay/browser/actors/MizuGesturesChild.sys.mjs
   overlay/browser/modules/MizuGestureActions.sys.mjs
   overlay/browser/modules/MizuTabSync.sys.mjs
+  overlay/browser/modules/MizuTabSyncState.sys.mjs
   overlay/browser/base/content/browser-mizu-tabsync.js
   overlay/browser/themes/shared/browser-mizu-tabsync.css
   overlay/browser/components/preferences/config/mizu-gestures.mjs
@@ -103,6 +105,7 @@ required_files=(
   patches/0011-add-mizu-tab-sync-pairing.patch
   patches/0012-package-mizu-distribution.patch
   packaging/arch/mizu.desktop
+  packaging/arch/mizu-launcher
   packaging/arch/mizu.svg
   packaging/arch/package.sh
   scripts/arch-package.sh
@@ -127,14 +130,47 @@ for tabsync_pref in enabled port token device-id; do
     "$PROJECT_ROOT/overlay/browser/branding/mizu/pref/firefox-branding.js" ||
     die "missing tab sync default: $tabsync_pref"
 done
-grep -q 'MizuTabSync.sys.mjs' "$PROJECT_ROOT/patches/0010-add-mizu-tab-sync.patch" ||
-  die "tab sync service is not packaged"
+for tabsync_module in MizuTabSync.sys.mjs MizuTabSyncState.sys.mjs; do
+  grep -q "$tabsync_module" \
+    "$PROJECT_ROOT/patches/0010-add-mizu-tab-sync.patch" ||
+    die "tab sync service is not packaged: $tabsync_module"
+done
 grep -q 'PrivateBrowsingUtils.isWindowPrivate' \
   "$PROJECT_ROOT/overlay/browser/modules/MizuTabSync.sys.mjs" ||
   die "tab sync does not exclude private windows"
 grep -q 'isPrivateAddress(transport.host)' \
   "$PROJECT_ROOT/overlay/browser/modules/MizuTabSync.sys.mjs" ||
   die "tab sync does not restrict clients to private networks"
+# Tabs are shared, not published: the two devices hold one set, and the rules
+# that keep their copies of it identical are the load-bearing part.
+grep -q 'TOMBSTONE_TTL_MS' \
+  "$PROJECT_ROOT/overlay/browser/modules/MizuTabSyncState.sys.mjs" ||
+  die "tab sync forgets closed tabs, so the other device would reopen them"
+grep -q 'return a.closed ? a : b' \
+  "$PROJECT_ROOT/overlay/browser/modules/MizuTabSyncState.sys.mjs" ||
+  die "tab sync lets an edit beat a close at the same revision"
+grep -q '"/v2/sync"' \
+  "$PROJECT_ROOT/overlay/browser/modules/MizuTabSync.sys.mjs" ||
+  die "tab sync does not serve the shared-tab-set protocol"
+# A tab that arrives from the phone must cost a row in the tab strip, not a
+# page load, or pairing a phone with forty tabs would stall this desktop.
+grep -q 'createLazyBrowser: true' \
+  "$PROJECT_ROOT/overlay/browser/modules/MizuTabSync.sys.mjs" ||
+  die "tab sync loads remote tabs eagerly"
+# Quitting is not closing. Without this the last window's teardown would close
+# every shared tab on the phone as well.
+grep -q 'quit-application-granted' \
+  "$PROJECT_ROOT/overlay/browser/modules/MizuTabSync.sys.mjs" ||
+  die "tab sync treats a quit as closing its tabs"
+# The merge rules are the half of tab sync the phone reimplements, so they are
+# checked by running them rather than by reading them.
+if command -v node >/dev/null 2>&1; then
+  note "Checking tab sync merge rules"
+  node "$PROJECT_ROOT/scripts/tabsync-merge-test.mjs" ||
+    die "tab sync merge rules do not converge"
+else
+  note "Skipping tab sync merge rules (node is not installed)"
+fi
 # Pairing is the only way the token reaches a phone, so the dialog that draws it
 # and the stylesheet that keeps it scannable both have to reach the build.
 for pairing_path in browser-mizu-tabsync.js browser-mizu-tabsync.css; do
@@ -441,6 +477,8 @@ grep -Fq '@RESPATH@/distribution/*' \
   die "Mizu extensions are not included in release packages"
 grep -Fq 'Exec=mizu %u' "$PROJECT_ROOT/packaging/arch/mizu.desktop" ||
   die "Arch desktop launcher does not start Mizu"
+grep -Fq 'mizu-browser/profile' "$PROJECT_ROOT/packaging/arch/mizu-launcher" ||
+  die "installed Mizu does not use an isolated persistent profile"
 
 if grep -Eq 'ac_add_options (MOZ_APP_ID|MOZ_APP_PROFILE|MOZ_APP_VENDOR)=' \
   "$PROJECT_ROOT/config/mozconfig.artifact" "$PROJECT_ROOT/config/mozconfig.full"; then
